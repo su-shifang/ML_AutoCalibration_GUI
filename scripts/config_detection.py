@@ -176,7 +176,7 @@ def config_detection(
                 relative_path = os.path.relpath(entry_path, eye1_path)
                 folder_structure = os.path.dirname(
                     relative_path).split(os.sep)
-
+                file_content = ""
                 # 组装数据，folder_structure[-1] 是当前文件的直接子文件夹名称
                 if len(folder_structure) > 0:
                     parent_folder = folder_structure[-1]
@@ -202,7 +202,7 @@ def config_detection(
                         value = ""
                     file_content = json.dumps(
                         file_content, indent=4, ensure_ascii=False)
-                elif entry.endswith('.tif') or entry.endswith('.tiff'):
+                elif entry.endswith('.tif') or entry.endswith('.tiff') or entry.endswith('.TIF'):
                     if folder == 'Dark':
                         try:
                             with Image.open(entry_path) as img:
@@ -234,14 +234,15 @@ def config_detection(
 
     for folder in folder_name:
         folder_path = os.path.join(eye1_path, folder)
-        if folder in config:
-            folder_rule = config[folder].get('Folder_Rule', '').strip()
-            recursive_search(folder_path, folder, folder_rule)
-            data.append(['', '', '', '', ''])  # 添加空行分隔不同文件夹的数据
-        else:
-            folder_rule = ''
-            recursive_search(folder_path, folder, folder_rule)
-            data.append(['', '', '', '', ''])
+        if os.path.exists(folder_path):
+            if folder in config:
+                folder_rule = config[folder].get('Folder_Rule', '').strip()
+                recursive_search(folder_path, folder, folder_rule)
+                data.append(['', '', '', '', ''])  # 添加空行分隔不同文件夹的数据
+            else:
+                folder_rule = ''
+                recursive_search(folder_path, folder, folder_rule)
+                data.append(['', '', '', '', ''])
     df = pd.DataFrame(data)
 
     df.to_excel(file, index=False)
