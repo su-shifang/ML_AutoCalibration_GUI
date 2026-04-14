@@ -25,6 +25,8 @@ from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 import cv2
 from scripts.mono_calibration import mono_calibration, mono_calibration_do_ffc
+import configparser
+import os
 
 
 class CalibrationThread(QThread):
@@ -84,6 +86,9 @@ class MonoCalibrationWindow(QDialog):
         self.binning_mode = ['AVERAGE', 'SUM']
         self.pixel_format = ['MLMono8', 'MLMono10', 'MLMono12',
                              'MLMono16', 'MLRGB24', 'MLBayer', 'MLBayerGB8', 'MLBayerGB12']
+        self.temp = False  # ini读取是否成功的标志
+        self.lum_folder_rule = ""
+        self.rad_folder_rule = ""
         self._init_ui()
 
         # 标识当前是否正在定标
@@ -435,6 +440,17 @@ class MonoCalibrationWindow(QDialog):
 
     def start_mono_calibration(self):
         try:
+            self.eye1_path = self.line_edit_eye1_path.text()
+            if os.path.exists(self.eye1_path):
+                self.get_lum_rad_folder_rule(self.eye1_path)
+            else:
+                QMessageBox.warning(self, "MLColorimeter",
+                                    "EYE1路径不存在", QMessageBox.Ok)
+                return
+            if not self.temp:
+                QMessageBox.warning(self, "MLColorimeter",
+                                    "config.ini读取失败", QMessageBox.Ok)
+                return
             self.out_path = self.line_edit_path.text()
             if self.out_path is None or self.out_path == "":
                 QMessageBox.warning(self, "MLColorimeter",
@@ -444,7 +460,6 @@ class MonoCalibrationWindow(QDialog):
             self.binn_selector = self.get_current_binning_selector()
             self.binn_mode = self.get_current_binning_mode()
             self.binn = mlcm.Binning(int(self.line_edit_binn.text().strip()))
-            self.eye1_path = self.line_edit_eye1_path.text()
             self.lum_dict = {}
             self.luminance_no_xyz = 0.0
             if (self.checkbox_exist_xyz.isChecked()):
@@ -500,7 +515,9 @@ class MonoCalibrationWindow(QDialog):
                 'image_point': self.image_point,
                 'roi_size': self.roi_size,
                 'expusure_offset': self.expusure_offset,
-                'gray_offset': self.gray_offset
+                'gray_offset': self.gray_offset,
+                'lum_folder_rule': self.lum_folder_rule,
+                'rad_folder_rule': self.rad_folder_rule
             }
             if self.checkbox_do_ffc.isChecked():
                 self.is_rx = self.checkbox_is_rx.isChecked()
@@ -544,6 +561,46 @@ class MonoCalibrationWindow(QDialog):
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
             self.is_calibrating = False  # 标识定标完成
+
+    def get_lum_rad_folder_rule(self, config_path):
+        self.ini_path = config_path+"/"+"config.ini"
+        if not os.path.exists(self.ini_path):
+            QMessageBox.critical(self, "MLColorimeter", "config.ini文件不存在，请检查eye1路径下的文件",
+                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            self.temp = False
+            return
+
+        config = configparser.ConfigParser()
+        try:
+            config.read(self.ini_path, encoding='utf-8')
+
+            if 'Luminance' in config:
+                self.lum_folder_rule = config['Luminance'].get(
+                    'Folder_Rule', '').strip()
+                self.lum_suffix = config['Luminance'].get('Suffix', '').strip()
+                self.temp = True
+            else:
+                QMessageBox.critical(self, "MLColorimeter", "config.ini文件中缺少Luminance部分，请检查eye1路径下的文件",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                self.temp = False
+                return
+
+            if 'Radiance' in config:
+                self.rad_folder_rule = config['Radiance'].get(
+                    'Folder_Rule', '').strip()
+                self.rad_suffix = config['Radiance'].get('Suffix', '').strip()
+                self.temp = True
+            else:
+                QMessageBox.critical(self, "MLColorimeter", "config.ini文件中缺少Radiance部分，请检查eye1路径下的文件",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                self.temp = False
+                return
+
+        except Exception as e:
+            QMessageBox.critical(self, "MLColorimeter", f"读取config.ini文件失败: {str(e)}",
+                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            self.temp = False
+            return
 
     def update_status(self, message):
         self.status_label.setText(

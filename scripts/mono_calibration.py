@@ -10,6 +10,7 @@ import pandas as pd
 from datetime import datetime
 from typing import List, Dict
 import time
+import re
 
 
 # 创建文件夹
@@ -48,6 +49,89 @@ def save_results_to_excel(results, out_path):
     logging.info(f"Calibration results saved to {result_file}")
 
 
+def parse_folder_rule(folder_rule: str) -> List[str]:
+    """
+    解析文件夹命名规则
+
+    Args:
+        folder_rule: 命名规则字符串，如 "Aperture_NDFilter_ColorFilter_LightSource"
+                    或 "Aperture_LightSource" 或 ""（空字符串）
+
+    Returns:
+        规则部分列表，如 ["Aperture", "NDFilter", "ColorFilter", "LightSource"]
+    """
+    if not folder_rule or not folder_rule.strip():
+        return []  # 空规则
+
+    # 按_分割并过滤空字符串
+    parts = [part.strip() for part in folder_rule.split("_") if part.strip()]
+
+    # 验证规则部分是否有效
+    valid_parts = {"Aperture", "NDFilter", "ColorFilter", "LightSource"}
+    for part in parts:
+        if part not in valid_parts:
+            raise RuntimeError(
+                f"警告: 规则中包含无效字段 '{part}'，有效字段为: {', '.join(valid_parts)}")
+    return parts
+
+
+def generate_folder_name(folder_rule: str, aperture: str = "",
+                         lightsource: str = "", nd: str = "", xyz: str = "") -> str:
+
+    # 解析规则
+    rule_parts = parse_folder_rule(folder_rule)
+
+    # 如果没有规则，返回默认名称或空字符串
+    if not rule_parts:
+        return ""  # 或者返回空字符串，根据你的需求
+
+    # 定义字段映射和默认值
+    field_mapping = {
+        "Aperture": aperture,
+        "NDFilter": nd,
+        "ColorFilter": xyz,  # ColorFilter对应XYZFilter字段
+        "LightSource": lightsource
+    }
+
+    # 定义字段值的特殊处理函数
+    def process_field_value(rule_part: str, value: str) -> str:
+        """处理字段值"""
+        if not value or str(value).strip() == "":
+            return ""
+
+        value = str(value).strip()
+
+        return value
+
+    # 生成文件夹名各部分
+    folder_parts = []
+
+    for rule_part in rule_parts:
+        if rule_part in field_mapping:
+            # 获取对应的字段值
+            value = field_mapping[rule_part]
+            if value == "":
+                continue
+            # 处理字段值
+            processed_value = process_field_value(rule_part, value)
+            folder_parts.append(processed_value)
+        else:
+            # 如果规则部分不在映射中，直接使用（虽然应该不会发生）
+            folder_parts.append(rule_part)
+
+    # 用下划线连接所有部分
+    folder_name = "_".join(folder_parts)
+
+    # 清理文件名中的非法字符
+    folder_name = re.sub(r'[<>:"/\\|?*]', '_', folder_name)
+
+    # 如果最终名称为空，返回默认值
+    if not folder_name or folder_name == "_":
+        return ""
+
+    return folder_name
+
+
 def mono_calibration(
         colorimeter: mlcm.ML_Colorimeter,
         binn_selector: mlcm.BinningSelector,
@@ -66,6 +150,8 @@ def mono_calibration(
         out_path: str,
         image_point: List[int],
         roi_size: List[int],
+        lum_folder_rule: str,
+        rad_folder_rule: str,
         expusure_offset: float = 0,
         gray_offset: float = 0,
         status_callback=None
@@ -73,7 +159,6 @@ def mono_calibration(
     def update_status(message):
         if status_callback:
             status_callback(message)
-
     if len(image_point) >= 2:
         image_x = int(image_point[0])
         image_y = int(image_point[1])
@@ -245,19 +330,30 @@ def mono_calibration(
         if item["Gray Range"] == "80.0%":
             if nd_list == []:
                 if xyz_list == []:
-                    file_name = "" + apturate + "_" + light_source
+                    lum_file_name = generate_folder_name(
+                        lum_folder_rule, apturate, light_source, "", "")
+                    rad_file_name = generate_folder_name(
+                        rad_folder_rule, apturate, light_source, "", "")
                 else:
                     xyz_filter = item["XYZFilter"]
-                    file_name = "" + apturate + "_" + xyz_filter + "_" + light_source
+                    lum_file_name = generate_folder_name(
+                        lum_folder_rule, apturate, light_source, "", xyz_filter)
+                    rad_file_name = generate_folder_name(
+                        rad_folder_rule, apturate, light_source, "", xyz_filter)
             else:
                 # 文件夹命名格式为Aperture_NDFilter_LightSource
                 nd_filter = item["NDFilter"]
                 if xyz_list == []:
-                    file_name = "" + apturate + "_" + nd_filter + "_" + light_source
+                    lum_file_name = generate_folder_name(
+                        lum_folder_rule, apturate, light_source, nd_filter, "")
+                    rad_file_name = generate_folder_name(
+                        rad_folder_rule, apturate, light_source, nd_filter, "")
                 else:
                     xyz_filter = item["XYZFilter"]
-                    file_name = "" + apturate + "_" + nd_filter + \
-                        "_" + xyz_filter + "_" + light_source
+                    lum_file_name = generate_folder_name(
+                        lum_folder_rule, apturate, light_source, nd_filter, xyz_filter)
+                    rad_file_name = generate_folder_name(
+                        rad_folder_rule, apturate, light_source, nd_filter, xyz_filter)
             luminance_k = item["K(L)"]
             radiance_k = item["K(R)"]
             luminance_config_path = os.path.join(eye1_path, "Luminance")
@@ -265,8 +361,8 @@ def mono_calibration(
             radiance_config_path = os.path.join(eye1_path, "Radiance")
             create_directory(radiance_config_path)
 
-            luminance_file_path = os.path.join(
-                luminance_config_path, file_name)
+            luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(
+                luminance_config_path, lum_file_name)
             os.makedirs(luminance_file_path, exist_ok=True)
             # 完整的文件路径
             luminance_json_file_path = os.path.join(
@@ -277,7 +373,8 @@ def mono_calibration(
             }
             save_json(data, luminance_json_file_path)
 
-            radiance_file_path = os.path.join(radiance_config_path, file_name)
+            radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(
+                radiance_config_path, rad_file_name)
             os.makedirs(radiance_file_path, exist_ok=True)
             # 完整的文件路径
             radiance_json_file_path = os.path.join(
@@ -310,6 +407,8 @@ def mono_calibration_do_ffc(
         out_path: str,
         image_point: List[int],
         roi_size: List[int],
+        lum_folder_rule: str,
+        rad_folder_rule: str,
         is_rx: bool = False,
         sph_list: List[float] = [0.0],
         cyl_list: List[float] = [0.0],
@@ -646,51 +745,55 @@ def mono_calibration_do_ffc(
             if item["Gray Range"] == "80.0%":
                 if nd_list == []:
                     if xyz_list == []:
-                        file_name = "" + apturate + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, "", "")
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, "", "")
                     else:
                         xyz_filter = item["XYZFilter"]
-                        file_name = "" + apturate + "_" + xyz_filter + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, "", xyz_filter)
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, "", xyz_filter)
                 else:
                     # 文件夹命名格式为Aperture_NDFilter_LightSource
                     nd_filter = item["NDFilter"]
                     if xyz_list == []:
-                        file_name = "" + apturate + "_" + nd_filter + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, nd_filter, "")
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, nd_filter, "")
                     else:
                         xyz_filter = item["XYZFilter"]
-                        file_name = "" + apturate + "_" + nd_filter + \
-                            "_" + xyz_filter + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, nd_filter, xyz_filter)
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, nd_filter, xyz_filter)
                 luminance_k = item["K(L)"]
                 radiance_k = item["K(R)"]
-                rx_name = item["RX"]
                 luminance_config_path = os.path.join(eye1_path, "Luminance")
                 create_directory(luminance_config_path)
                 radiance_config_path = os.path.join(eye1_path, "Radiance")
                 create_directory(radiance_config_path)
 
-                luminance_file_path = os.path.join(
-                    luminance_config_path, file_name)
+                luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(
+                    luminance_config_path, lum_file_name)
                 os.makedirs(luminance_file_path, exist_ok=True)
-
-                luminance_RX_path = os.path.join(luminance_file_path, rx_name)
-                os.makedirs(luminance_RX_path, exist_ok=True)
                 # 完整的文件路径
                 luminance_json_file_path = os.path.join(
-                    luminance_RX_path, "Luminance.json")
+                    luminance_file_path, "Luminance.json")
                 # 创建要写入的字典
                 data = {
                     "Luminance": [[float(luminance_k), 0]]
                 }
                 save_json(data, luminance_json_file_path)
 
-                radiance_file_path = os.path.join(
-                    radiance_config_path, file_name)
+                radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(
+                    radiance_config_path, rad_file_name)
                 os.makedirs(radiance_file_path, exist_ok=True)
-
-                radiance_RX_path = os.path.join(radiance_file_path, rx_name)
-                os.makedirs(radiance_RX_path, exist_ok=True)
                 # 完整的文件路径
                 radiance_json_file_path = os.path.join(
-                    radiance_RX_path, "Radiance.json")
+                    radiance_file_path, "Radiance.json")
                 # 创建要写入的字典
                 data1 = {
                     "Radiance": [[float(radiance_k), 0]]
@@ -983,19 +1086,30 @@ def mono_calibration_do_ffc(
             if item["Gray Range"] == "80.0%":
                 if nd_list == []:
                     if xyz_list == []:
-                        file_name = "" + apturate + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, "", "")
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, "", "")
                     else:
                         xyz_filter = item["XYZFilter"]
-                        file_name = "" + apturate + "_" + xyz_filter + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, "", xyz_filter)
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, "", xyz_filter)
                 else:
                     # 文件夹命名格式为Aperture_NDFilter_LightSource
                     nd_filter = item["NDFilter"]
                     if xyz_list == []:
-                        file_name = "" + apturate + "_" + nd_filter + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, nd_filter, "")
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, nd_filter, "")
                     else:
                         xyz_filter = item["XYZFilter"]
-                        file_name = "" + apturate + "_" + nd_filter + \
-                            "_" + xyz_filter + "_" + light_source
+                        lum_file_name = generate_folder_name(
+                            lum_folder_rule, apturate, light_source, nd_filter, xyz_filter)
+                        rad_file_name = generate_folder_name(
+                            rad_folder_rule, apturate, light_source, nd_filter, xyz_filter)
                 luminance_k = item["K(L)"]
                 radiance_k = item["K(R)"]
                 luminance_config_path = os.path.join(eye1_path, "Luminance")
@@ -1003,8 +1117,8 @@ def mono_calibration_do_ffc(
                 radiance_config_path = os.path.join(eye1_path, "Radiance")
                 create_directory(radiance_config_path)
 
-                luminance_file_path = os.path.join(
-                    luminance_config_path, file_name)
+                luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(
+                    luminance_config_path, lum_file_name)
                 os.makedirs(luminance_file_path, exist_ok=True)
                 # 完整的文件路径
                 luminance_json_file_path = os.path.join(
@@ -1015,8 +1129,8 @@ def mono_calibration_do_ffc(
                 }
                 save_json(data, luminance_json_file_path)
 
-                radiance_file_path = os.path.join(
-                    radiance_config_path, file_name)
+                radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(
+                    radiance_config_path, rad_file_name)
                 os.makedirs(radiance_file_path, exist_ok=True)
                 # 完整的文件路径
                 radiance_json_file_path = os.path.join(
