@@ -12,12 +12,16 @@ from PyQt5.QtWidgets import (
     QDialog,
     QComboBox,
     QFormLayout,
+    QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon,QTextCharFormat,QColor
 from core.app_config import AppConfig
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.capture_dark_heatmap import capture_dark_heatmap
+from datetime import datetime
+from typing import Literal
+MsgLevel = Literal["INFO", "WARN", "ERROR"]
 
 
 class DarkHeatMapThread(QThread):
@@ -31,8 +35,11 @@ class DarkHeatMapThread(QThread):
 
     def run(self):
         try:
+            # 包装回调：接受level，msg，拼接成字符串再发给信号
+            def callback_wrapper(level: MsgLevel,msg:str):
+                self.status_update.emit(msg)
             capture_dark_heatmap(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=callback_wrapper, **self.parameters) # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -48,9 +55,9 @@ class DarkHeatMapWindow(QDialog):
         self.setGeometry(200, 200, 800, 500)
         self.colorimeter = AppConfig.get_colorimeter()
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.intValidator = QIntValidator()
         self.doubleValidator = QDoubleValidator()
         self.dialog_title = "选择文件夹"
@@ -102,7 +109,7 @@ class DarkHeatMapWindow(QDialog):
 
         self.label_pixel_format = QLabel(" pixel_format：")
         self.line_edit_pixel_format = QComboBox()
-        self.line_edit_pixel_format.addItems(self.pixel_format)
+        self.line_edit_pixel_format.addItems(self.pixel_format) # type: ignore
         self.line_edit_pixel_format.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.line_edit_pixel_format.setCurrentText("MLMono12")
@@ -194,9 +201,9 @@ class DarkHeatMapWindow(QDialog):
         self.btn_capture.clicked.connect(self.start_capture)
         grid_layout.addWidget(self.btn_capture, 15, 0)
 
-        self.status_label = QLabel("状态：等待开始")
-        self.status_label.setWordWrap(True)  # 设置自动换行
-        grid_layout.addWidget(self.status_label, 16, 0)
+        self.log_box=QPlainTextEdit()
+        self.log_box.setReadOnly(True)
+        grid_layout.addWidget(self.log_box,16,0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -204,13 +211,35 @@ class DarkHeatMapWindow(QDialog):
 
         self.setLayout(grid_layout)
 
+    def flush_log(self,msg):
+        cursor = self.log_box.textCursor()
+        cursor.movePosition(cursor.End)
+
+        fmt = QTextCharFormat()
+        # 文字固定黑色，只靠前面emoji区分等级
+        fmt.setForeground(QColor("#000000"))
+        if "info" in msg.lower():
+            prefix = "🟢 "
+        elif "error" in msg.lower():
+            prefix = "🔴 "
+        elif "warn" in msg.lower():
+            prefix = "🟡 "
+        else:
+            prefix = "⚪ "
+        full_text=f"{prefix}{datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]} {msg}\n"
+        cursor.insertText(full_text, fmt)
+        self.log_box.setTextCursor(cursor)
+        # 自动滚动到底部
+        sb=self.log_box.verticalScrollBar()
+        sb.setValue(sb.maximum())
+        
     def _open_folder_dialog(self):
         # 打开文件夹选择对话框
         folder_path = QFileDialog.getExistingDirectory(
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:
@@ -238,59 +267,49 @@ class DarkHeatMapWindow(QDialog):
             self.etlist = [float(et)
                            for et in self.line_edit_etlist.text().split()]
             self.binnlist = [
-                int(binn) for binn in self.line_edit_binnlist.text().strip().split()]
+                mlcm.Binning(int(binn)) for binn in self.line_edit_binnlist.text().strip().split()]
             # self.binnlist = [mlcm.Binning(B) for B in binn_enum]
             self.ndlist = [mlcm.MLFilterEnum(int(nd))
                            for nd in self.line_edit_ndlist.text().split()]
             self.xyzlist = [mlcm.MLFilterEnum(int(xyz))
                             for xyz in self.line_edit_xyzlist.text().split()]
             self.file_name = self.line_edit_filename.text() + ".xlsx"
-            self.status_label.setText(
-                "<span style='color: green;'>状态: 正在进行拍图或计算...</span>")  # 更新状态
             self.btn_capture.setEnabled(False)
             self.is_running = True
             parameters = {
                 'colorimeter': self.colorimeter,
+                'nd_list': self.ndlist,
+                'xyz_list': self.xyzlist,
+                'binning_list': self.binnlist,
+                'et_list': self.etlist,
+                'save_path': self.save_path,
+                'capture_times': self.capture_times,
+                'file_name': self.file_name,
                 'binn_selector': self.binn_selector,
                 'binn_mode': self.binn_mode,
                 'binn': self.binn,
                 'pixel_format': self.pixel_format,
-                'nd_list': self.ndlist,
-                'xyz_list': self.xyzlist,
-                'binn_list': self.binnlist,
-                'et_list': self.etlist,
-                'save_path': self.save_path,
-                'file_name': self.file_name,
-                'capture_times': self.capture_times
             }
             self.darkheatmapThread = DarkHeatMapThread(parameters)
             self.darkheatmapThread.finished.connect(
                 self.on_darkheatmap_finished)
             self.darkheatmapThread.error.connect(self.on_darkheatmap_error)
-            self.darkheatmapThread.status_update.connect(self.update_status)
+            self.darkheatmapThread.status_update.connect(self.flush_log)
             self.darkheatmapThread.start()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
-            self.is_running = False
-
-    def update_status(self, message):
-        self.status_label.setText(
-            f"<span style='color: green;'>状态: {message}</span>")
+            self.is_running = False 
 
     def on_darkheatmap_finished(self):
         QMessageBox.information(self, "MLColorimeter", "完成!", QMessageBox.Ok)
-        self.status_label.setText(
-            "<span style='color: green;'>状态: 完成！</span>")  # 更新状态
         self.btn_capture.setEnabled(True)
         self.is_running = False  # 标识定标完成
 
     def on_darkheatmap_error(self, error_message):
         QMessageBox.critical(self, "MLColorimeter",
                              "发生错误: " + error_message, QMessageBox.Ok)
-        self.status_label.setText(
-            f"<span style='color: red;'>状态: 发生错误: {error_message}</span>")  # 更新状态为红色
         self.btn_capture.setEnabled(True)
         self.is_running = False  # 标识定标完成
 
