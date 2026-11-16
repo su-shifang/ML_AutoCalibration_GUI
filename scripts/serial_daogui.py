@@ -391,7 +391,7 @@ class serial_daogui:
 
     def get_VID(self):
         pulse = self.get_pulse()
-        VID = int((self.total_pulse - pulse) / 1000)
+        VID = int((self.total_pulse - pulse) / 1000) # type: ignore
         return VID
 
 

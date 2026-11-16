@@ -99,7 +99,7 @@ if __name__ == "__main__":
             roi = JNCD_i[y1:y2, x1:x2]
             gray = cv2.mean(roi)[0]
             gray_list.append(gray)
-            line.append(gray)
+            line.append(gray) # type: ignore
 
         avg = np.mean(gray_list)
         max = np.max(gray_list)

@@ -16,9 +16,9 @@ class VersionWindow(QDialog):
         self.setWindowTitle("About AutoCalibration GUI")
         self.setGeometry(300, 300, 500, 200)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self._init_ui()
 
     def _init_ui(self):

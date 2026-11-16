@@ -197,7 +197,7 @@ def resize_crop_images(
                                 save_path=save_path,
                                 nd=nd,
                                 xyz=xyz,
-                                sphere_list=sphere_list,
+                                sphere_list=sphere_list, # type: ignore
                                 light_source=light_source,
                                 aperture=aperture
                             )

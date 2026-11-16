@@ -99,8 +99,8 @@ if __name__=='__main__':
              bbox=dict(facecolor='black', alpha=0.5))
     plt.title('Lv fluctuation')
     plt.subplot(3, 2, 2)
-    Along_col = lv_repeat[center_row, (center_col - half_size): (center_col + half_size)]
-    Along_row = lv_repeat[(center_row - half_size): (center_row + half_size), center_col]
+    Along_col = lv_repeat[center_row, (center_col - half_size): (center_col + half_size)] # type: ignore
+    Along_row = lv_repeat[(center_row - half_size): (center_row + half_size), center_col] # type: ignore
     plt.plot(Along_col)
     plt.plot(Along_row)
     plt.grid(which='both')
@@ -123,8 +123,8 @@ if __name__=='__main__':
              bbox=dict(facecolor='black', alpha=0.5))
     plt.title('CIEx fluctuation')
     plt.subplot(3, 2, 4)
-    Along_col = CIEx_repeat[center_row, (center_col - half_size): (center_col + half_size)]
-    Along_row = CIEx_repeat[(center_row - half_size): (center_row + half_size), center_col]
+    Along_col = CIEx_repeat[center_row, (center_col - half_size): (center_col + half_size)] # type: ignore
+    Along_row = CIEx_repeat[(center_row - half_size): (center_row + half_size), center_col] # type: ignore
     plt.plot(Along_col)
     plt.plot(Along_row)
     plt.grid(which='both')
@@ -148,8 +148,8 @@ if __name__=='__main__':
              bbox=dict(facecolor='black', alpha=0.5))
     plt.title('CIEy fluctuation')
     plt.subplot(3, 2, 6)
-    Along_col = CIEy_repeat[center_row, (center_col - half_size): (center_col + half_size)]
-    Along_row = CIEy_repeat[(center_row - half_size): (center_row + half_size), center_col]
+    Along_col = CIEy_repeat[center_row, (center_col - half_size): (center_col + half_size)] # type: ignore
+    Along_row = CIEy_repeat[(center_row - half_size): (center_row + half_size), center_col] # type: ignore
     plt.plot(Along_col)
     plt.plot(Along_row)
     plt.grid(which='both')

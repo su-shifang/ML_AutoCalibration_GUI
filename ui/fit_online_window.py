@@ -33,7 +33,7 @@ class FitOnlineThread(QThread):
     def run(self):
         try:
             circle_fit_online(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -51,7 +51,7 @@ class PolynomialFitOnlineThread(QThread):
     def run(self):
         try:
             polynomial_fit_online(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -63,9 +63,9 @@ class FitOnlineWindow(QDialog):
         self.setWindowTitle("fit online")
         self.setGeometry(200, 200, 800, 500)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
         self.int_validator = QIntValidator()
         self.double_validator = QDoubleValidator()
@@ -99,7 +99,7 @@ class FitOnlineWindow(QDialog):
 
         self.label_pixel_format = QLabel(" pixel_format：")
         self.line_edit_pixel_format = QComboBox()
-        self.line_edit_pixel_format.addItems(self.pixel_format)
+        self.line_edit_pixel_format.addItems(self.pixel_format) # type: ignore
         self.line_edit_pixel_format.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.line_edit_pixel_format.setCurrentText("MLMono12")
@@ -314,7 +314,7 @@ class FitOnlineWindow(QDialog):
                 self.fit_online_thread.start()
 
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
             self.is_running = False
@@ -352,7 +352,7 @@ class FitOnlineWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:

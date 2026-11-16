@@ -29,9 +29,9 @@ class ExposureConfigWindow(QDialog):
         self.setWindowTitle("Exposure Configuration")
         self.setGeometry(250, 250, 400, 300)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
 
         self.colorimeter = AppConfig.get_colorimeter()
         self.nd_list = nd_list

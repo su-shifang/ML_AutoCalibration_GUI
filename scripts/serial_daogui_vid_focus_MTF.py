@@ -325,7 +325,7 @@ def start_calibration_vid(
     os.makedirs(result_path,exist_ok=True)
     path=result_path+"\\throught_focus"
     os.makedirs(path,exist_ok=True)
-    roi_config_path=os.path.join(roi_out_path, "roividconfig.json")
+    roi_config_path=os.path.join(roi_out_path, "roividconfig.json") # type: ignore
 
 
     for vid in vid_list:

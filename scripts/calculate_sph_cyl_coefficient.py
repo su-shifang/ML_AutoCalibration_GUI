@@ -85,10 +85,12 @@ def calculate_sph_cyl_coefficinet(
                     if sph == 0:
                         last_sph = gray
                 # 格式化结果并添加到results列表中
-                formatted_results = {sph: format(
+                sph_data={sph: format(
                     gray / last_sph, ".3f") for sph, gray in sph_coefficient.items()}
                 update_status(f"sph coefficient: {sph_coefficient} ")
-                formatted_results['循环次数'] = i+1
+                
+                formatted_results = {"sph_data": sph_data,
+                                     "循环次数": i+1}
                 sph_results.append(formatted_results)
 
                 for cyl in cyl_list:
@@ -112,11 +114,12 @@ def calculate_sph_cyl_coefficinet(
 
                     if cyl == 0:
                         last_cyl = gray
-                formatted_results = {sph: format(
+
+                cyl_data={sph: format(
                     gray / last_cyl, ".3f") for sph, gray in cyl_coefficient.items()}
                 update_status(f"cyl coefficient: {cyl_coefficient} ")
-
-                formatted_results['循环次数'] = i+1
+                formatted_results = {"cyl_data": cyl_data,
+                                     "循环次数": i+1}
                 cyl_results.append(formatted_results)
 
             df = pd.DataFrame(sph_results)

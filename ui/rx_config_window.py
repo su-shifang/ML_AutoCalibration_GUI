@@ -15,9 +15,9 @@ class RXConfigWindow(QDialog):
         self.setWindowTitle("RX config")
         self.setGeometry(250, 250, 400, 300)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.nd_list = nd_list
         self.nd_input_fields = {}  # 用于存储输入框
         self.is_config_saved = False

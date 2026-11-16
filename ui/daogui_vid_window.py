@@ -54,7 +54,7 @@ class CaptureImageVIDThread(QThread):
     def run(self):
         try:
             start_capture_image_vid(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -66,9 +66,9 @@ class DaoGuiVIDWindow(QDialog):
         self.setWindowTitle("daogui VID test")
         self.setGeometry(200, 200, 800, 500)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
         self.intValidator = QIntValidator()
         self.doubleValidator = QDoubleValidator()
@@ -128,7 +128,7 @@ class DaoGuiVIDWindow(QDialog):
 
         self.label_pixel_format = QLabel(" pixel_format：")
         self.line_edit_pixel_format = QComboBox()
-        self.line_edit_pixel_format.addItems(self.pixel_format)
+        self.line_edit_pixel_format.addItems(self.pixel_format) # type: ignore
         self.line_edit_pixel_format.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.line_edit_pixel_format.setCurrentText("MLMono12")
@@ -405,7 +405,7 @@ class DaoGuiVIDWindow(QDialog):
 
         except Exception as e:
             QMessageBox.critical(
-                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) # type: ignore
             self.btn_test.setEnabled(True)
             self.is_running = False
 
@@ -476,7 +476,7 @@ class DaoGuiVIDWindow(QDialog):
 
         except Exception as e:
             QMessageBox.critical(
-                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) # type: ignore
             self.btn_vid_image.setEnabled(True)
             self.is_running = False  # 标识完成
 
@@ -508,7 +508,7 @@ class DaoGuiVIDWindow(QDialog):
 
         except Exception as e:
             QMessageBox.critical(
-                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) # type: ignore
             self.btn_roi_config.setEnabled(True)
 
     def start_vid_test(self):
@@ -561,7 +561,7 @@ class DaoGuiVIDWindow(QDialog):
                 pos_offset=self.pos_offset,
                 coef=self.coef,
                 total_pulse=self.total_pulse,
-                roi_out_path=self.roi_out_path,
+                roi_out_path=self.roi_out_path, # type: ignore
                 out_path=self.out_path,
                 light_source=self.light_source,
                 through_focus=self.throughFocus
@@ -569,7 +569,7 @@ class DaoGuiVIDWindow(QDialog):
 
         except Exception as e:
             QMessageBox.critical(
-                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                self, "MLColorimeter", e, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) # type: ignore
 
     def _open_folder_dialog(self, lineedit: QLineEdit):
         # 打开文件夹选择对话框
@@ -577,7 +577,7 @@ class DaoGuiVIDWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:

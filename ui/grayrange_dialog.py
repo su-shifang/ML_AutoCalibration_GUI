@@ -12,7 +12,7 @@ class GrayRangeDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(f"输入灰度 {loop_i}0% 的灰度显示范围")
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
 
         self.loop_i = loop_i
         self.min_gray_input = QLineEdit(self)
@@ -27,7 +27,7 @@ class GrayRangeDialog(QDialog):
         layout.addWidget(QLabel("最大值:"))
         layout.addWidget(self.max_gray_input)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel) # type: ignore
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 

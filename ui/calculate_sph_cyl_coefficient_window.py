@@ -32,7 +32,7 @@ class CalculateSphCylCoefficientThread(QThread):
     def run(self):
         try:
             calculate_sph_cyl_coefficinet(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -44,9 +44,9 @@ class CalculateSphCylCoefficientWindow(QDialog):
         self.setWindowTitle("CalculateSphCylCoefficient")
         self.setGeometry(200, 200, 800, 500)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
         self.intValidator = QIntValidator()
         self.doubleValidator = QDoubleValidator()
@@ -198,7 +198,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
                 self.update_config)
             self.exposure_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_config(self, exposure_map):
@@ -223,7 +223,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:
@@ -276,7 +276,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
                 self.update_status)
             self.calculatesphcylcoefThread.start()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
             self.is_running = False  # 标识定标完成

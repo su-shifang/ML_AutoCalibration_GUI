@@ -14,9 +14,9 @@ class ROIConfigWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("roi config")
         self.setGeometry(250, 250, 400, 300)
-        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.binn_list = binn_list
         self.roi_dict={} # 用于存储每个Binning的ROI列表
         self.binn_input_fields = {}  # 用于存储输入框

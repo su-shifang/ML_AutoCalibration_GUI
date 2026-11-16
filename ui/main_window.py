@@ -38,7 +38,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Colorimeter Controller")
         self.setGeometry(100, 100, 1024, 768)
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self._init_ui()
         self.colorimeter = AppConfig.get_colorimeter()
         self.select_path = ""
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.Yes,
             )
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def disconnect_colorimeter(self):
@@ -343,3 +343,8 @@ class MainWindow(QMainWindow):
     def config_Detection(self):
         self.config_detection_window = ConfigDetectionWindow()
         self.config_detection_window.exec_()
+
+    def closeEvent(self, event):
+        event.accept()
+        import sys
+        sys.exit(0)

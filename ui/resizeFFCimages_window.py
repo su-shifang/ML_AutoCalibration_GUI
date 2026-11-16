@@ -27,7 +27,7 @@ class ResizeFFCImagesThread(QThread):
     
     def run(self):
         try:
-            resize_crop_images(status_callback=self.status_update.emit,**self.parameters)
+            resize_crop_images(status_callback=self.status_update.emit,**self.parameters) # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -38,9 +38,9 @@ class ResizeFFCImagesWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("resize FFC images")
         self.setGeometry(200, 200, 800, 500)
-        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.dialog_title = "选择文件夹"
         self.default_path = ""
         self._init_ui()
@@ -164,7 +164,7 @@ class ResizeFFCImagesWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:
@@ -178,7 +178,7 @@ class ResizeFFCImagesWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
         if folder_path:
             self.line_edit_ffc_path.setText(folder_path)
@@ -238,7 +238,7 @@ class ResizeFFCImagesWindow(QDialog):
             self.resizeffc_thread.status_update.connect(self.update_status)
             self.resizeffc_thread.start()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_start.setEnabled(True)
             self.is_running=False

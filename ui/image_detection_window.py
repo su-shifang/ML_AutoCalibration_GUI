@@ -26,7 +26,7 @@ class ImageDetectionThread(QThread):
     
     def run(self):
         try:
-            check_image_corruption(status_callback=self.status_update.emit, **self.parameters)
+            check_image_corruption(status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit() # 发送完成信号
         except Exception as e:
             self.error.emit(str(e)) # 发送错误信号
@@ -36,9 +36,9 @@ class ImageDetectionWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("image detection")
         self.setGeometry(200, 200, 800, 500)
-        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.dialog_title = "选择文件夹"
         self.default_path = ""
         self._init_ui()
@@ -94,7 +94,7 @@ class ImageDetectionWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:
@@ -131,7 +131,7 @@ class ImageDetectionWindow(QDialog):
                         file_path=os.path.join(root,file)
                         try:
                             with Image.open(file_path) as img:
-                                self.width,self.height=img.size
+                                self.width,self.height=img.size # type: ignore
                                 QMessageBox.information(self,"MLColorimeter",f"检测的正常的第一张图像分辨率为：{self.width}x{self.height}像素",QMessageBox.Ok)
                                 break
                         except (IOError,SyntaxError) as e: # type: ignore

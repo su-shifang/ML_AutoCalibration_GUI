@@ -1,5 +1,5 @@
 import mlcolorimeter as mlcm
-from typing import List, Dict
+from typing import List, Dict,Optional
 import cv2
 import csv
 import os
@@ -41,7 +41,7 @@ def measurement(
     fourcolor_wb,
     ffc_xlsx,
     fourcolor_xlsx,
-    uniformity_path:str
+    uniformity_path: str
 ):
     mono = colorimeter.ml_bino_manage.ml_get_module_by_id(module_id)
     # capture data
@@ -80,7 +80,8 @@ def measurement(
     processed_data = colorimeter.ml_get_processed_data(module_id)
 
     # save calibration data
-    ret = colorimeter.ml_save_processed_data(module_id, processed_data, save_config)
+    ret = colorimeter.ml_save_processed_data(
+        module_id, processed_data, save_config)
     if not ret.success:
         raise RuntimeError("ml_save_processed_data error")
 
@@ -119,7 +120,7 @@ def measurement(
 
         row, col = img.shape[0], img.shape[1]
         center_row, center_col = int(row / 2), int(col / 2)
-        half_size = half_size / mlcm.Binning_to_Int(binn)
+        half_size = half_size / mlcm.Binning_to_Int(binn) # type: ignore
 
         fig = plt.figure(figsize=(16, 4))
         plt.subplot(1, 2, 1)
@@ -148,7 +149,8 @@ def measurement(
         # 保存图形
         plt.savefig(
             uniformity_path + "\\FFC_ " +
-            mlcm.Binning_to_str(binn) +"_" + RX_str + "_" + mlcm.MLFilterEnum_to_str(xyz) + ".png",
+            mlcm.Binning_to_str(binn) + "_" + RX_str + "_" +
+            mlcm.MLFilterEnum_to_str(xyz) + ".png",
             bbox_inches="tight",
         )
         plt.close(fig)
@@ -218,8 +220,10 @@ def cal_synthetic_mean_images(
                 sphere_list=[0],
                 light_source=mono.ml_get_light_source()
             )
-            update_status(f"calculate mean images for: {mlcm.MLFilterEnum_to_str(xyz)}")
-        update_status(f"calculate mean images for: {mlcm.MLFilterEnum_to_str(nd)}")
+            update_status(
+                f"calculate mean images for: {mlcm.MLFilterEnum_to_str(xyz)}")
+        update_status(
+            f"calculate mean images for: {mlcm.MLFilterEnum_to_str(nd)}")
     update_status("calculate ffc synthetic mean finish")
 
 
@@ -282,7 +286,8 @@ def capture_ffc_images(
                     avg_count=capture_times,
                     exposure_map=exposure_map[nd]
                 )
-                update_status(f"capture image for: {mlcm.pyRXCombination_to_str(rx)}")
+                update_status(
+                    f"capture image for: {mlcm.pyRXCombination_to_str(rx)}")
                 if not ret.success:
                     raise RuntimeError("ml_capture_ffc2 error")
 
@@ -298,7 +303,8 @@ def capture_ffc_images(
                         avg_count=capture_times,
                         exposure_map=exposure_map[nd]
                     )
-                    update_status(f"capture image for: {mlcm.pyRXCombination_to_str(rx)}")
+                    update_status(
+                        f"capture image for: {mlcm.pyRXCombination_to_str(rx)}")
                     if not ret.success:
                         raise RuntimeError("ml_capture_ffc2 error")
 
@@ -316,7 +322,7 @@ def cal_uniformity(
     exposure_map: Dict[mlcm.MLFilterEnum, mlcm.pyExposureSetting],
     roi_dict: Dict[mlcm.Binning, List[mlcm.pyCVRect]],
     use_RX: bool = False,
-    rx_dict: Dict[mlcm.MLFilterEnum, List] = None,
+    rx_dict: Optional[Dict[mlcm.MLFilterEnum, List]] = None,
     status_callback=None
 ):
     def update_status(message):
@@ -343,7 +349,7 @@ def cal_uniformity(
         if not ret.success:
             raise RuntimeError("ml_move_nd_syn error")
 
-        if use_RX:
+        if use_RX and rx_dict is not None:
             sph_list = rx_dict[nd][0]
             cyl_list = rx_dict[nd][1]
             axis_list = rx_dict[nd][2]
@@ -362,7 +368,7 @@ def cal_uniformity(
             title = str(pow(2, int(binn))) + "X" + str(pow(2, int(binn)))
             ffc_ws = ffc_wb.create_sheet(title=title)
             ffc_title = ["RX", "ColorFilter", "NDFilter", "Light Source", "ROI1", "ROI2", "ROI3",
-                        "ROI4", "ROI5", "ROI6", "ROI7", "ROI8", "ROI9", "Mean", "Std", "Min", "Max", "Min/Max", "Uniformity"]
+                         "ROI4", "ROI5", "ROI6", "ROI7", "ROI8", "ROI9", "Mean", "Std", "Min", "Max", "Min/Max", "Uniformity"]
             ffc_ws.append(ffc_title)
 
             fourcolor_wb = Workbook()
@@ -372,7 +378,7 @@ def cal_uniformity(
             title = str(pow(2, int(binn))) + "X" + str(pow(2, int(binn)))
             fourcolor_ws = fourcolor_wb.create_sheet(title=title)
             fourcolor_title = ["RX", "CxCyLuminance", "NDFilter", "Light Source", "ROI1", "ROI2", "ROI3",
-                                    "ROI4", "ROI5", "ROI6", "ROI7", "ROI8", "ROI9", "Mean", "Std", "Min", "Max", "Min/Max", "Uniformity"]
+                               "ROI4", "ROI5", "ROI6", "ROI7", "ROI8", "ROI9", "Mean", "Std", "Min", "Max", "Min/Max", "Uniformity"]
             fourcolor_ws.append(fourcolor_title)
 
             if not use_RX:
@@ -381,11 +387,11 @@ def cal_uniformity(
 
                 # calibration config for measurement
                 cali_config = mlcm.pyCalibrationConfig(
-                    input_path=cali_path, 
-                    aperture=mono.ml_get_aperture(), 
-                    nd_filter_list=[nd], 
+                    input_path=cali_path,
+                    aperture=mono.ml_get_aperture(),
+                    nd_filter_list=[nd],
                     color_filter_list=xyz_list,
-                    rx=rx, 
+                    rx=rx,
                     light_source_list=[mono.ml_get_light_source()],
                     dark_flag=True,
                     ffc_flag=True,
@@ -404,23 +410,23 @@ def cal_uniformity(
                 )
 
                 measurement(
-                    colorimeter, 
-                    half_size, 
+                    colorimeter,
+                    half_size,
                     vrange,
-                    nd, 
-                    xyz_list, 
-                    RX_str, 
-                    binn, 
-                    exposure_map, 
+                    nd,
+                    xyz_list,
+                    RX_str,
+                    binn,
+                    exposure_map,
                     module_id,
-                    cali_config, 
-                    save_config, 
-                    roi_dict, 
-                    ffc_ws, 
-                    fourcolor_ws, 
-                    ffc_wb, 
-                    fourcolor_wb, 
-                    ffc_xlsx, 
+                    cali_config,
+                    save_config,
+                    roi_dict,
+                    ffc_ws,
+                    fourcolor_ws,
+                    ffc_wb,
+                    fourcolor_wb,
+                    ffc_xlsx,
                     fourcolor_xlsx,
                     uniformity_path
                 )
@@ -438,11 +444,11 @@ def cal_uniformity(
 
                             # calibration config for measurement
                             cali_config = mlcm.pyCalibrationConfig(
-                                input_path=cali_path, 
-                                aperture=mono.ml_get_aperture(), 
-                                nd_filter_list=[nd], 
+                                input_path=cali_path,
+                                aperture=mono.ml_get_aperture(),
+                                nd_filter_list=[nd],
                                 color_filter_list=xyz_list,
-                                rx=rx, 
+                                rx=rx,
                                 light_source_list=[mono.ml_get_light_source()],
                                 dark_flag=True,
                                 ffc_flag=True,
@@ -461,23 +467,23 @@ def cal_uniformity(
                             )
 
                             measurement(
-                                colorimeter, 
-                                half_size, 
+                                colorimeter,
+                                half_size,
                                 vrange,
-                                nd, 
-                                xyz_list, 
-                                RX_str, 
-                                binn, 
-                                exposure_map, 
+                                nd,
+                                xyz_list,
+                                RX_str,
+                                binn,
+                                exposure_map,
                                 module_id,
-                                cali_config, 
-                                save_config, 
-                                roi_dict, 
-                                ffc_ws, 
-                                fourcolor_ws, 
-                                ffc_wb, 
-                                fourcolor_wb, 
-                                ffc_xlsx, 
+                                cali_config,
+                                save_config,
+                                roi_dict,
+                                ffc_ws,
+                                fourcolor_ws,
+                                ffc_wb,
+                                fourcolor_wb,
+                                ffc_xlsx,
                                 fourcolor_xlsx,
                                 uniformity_path
                             )

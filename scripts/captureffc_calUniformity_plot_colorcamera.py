@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from openpyxl import Workbook, load_workbook
 
 
-__all__ = ["cal_synthetic_mean_images", "capture_ffc_images", "cal_uniformity"]
+__all__ = ["cal_synthetic_mean_images", "capture_ffc_images", "cal_uniformity"] # type: ignore
 
 
 def datetime_str():
@@ -114,7 +114,7 @@ def measurement2(
 
         row, col = img.shape[0], img.shape[1]
         center_row, center_col = int(row / 2), int(col / 2)
-        half_size = half_size / mlcm.Binning_to_Int(binn)
+        half_size = half_size / mlcm.Binning_to_Int(binn) # type: ignore
 
         fig = plt.figure(figsize=(16, 4))
         plt.subplot(1, 2, 1)
@@ -258,7 +258,7 @@ def capture_ffc_images2(
                 nd=nd,
                 rx=rx,
                 avg_count=capture_times,
-                exposure_map=exposure_map[nd]
+                exposure_map=exposure_map[nd] # type: ignore
             )
             if not ret.success:
                 raise RuntimeError("ml_capture_ffc_colorcamera error")
@@ -272,7 +272,7 @@ def capture_ffc_images2(
                     nd=nd,
                     rx=rx,
                     avg_count=capture_times,
-                    exposure_map=exposure_map[nd]
+                    exposure_map=exposure_map[nd] # type: ignore
                 )
                 update_status(
                     f"capture image for: {mlcm.pyRXCombination_to_str(rx)}")
@@ -309,7 +309,7 @@ def cal_uniformity2(
     exposure: mlcm.pyExposureSetting,
     roi_dict: Dict[mlcm.Binning, List[mlcm.pyCVRect]],
     use_RX: bool = False,
-    rx_dict: Dict[mlcm.MLFilterEnum, List] = None,
+    rx_dict: Dict[mlcm.MLFilterEnum, List] = None, # type: ignore
     status_callback=None
 ):
     def update_status(message):
@@ -451,23 +451,23 @@ def cal_uniformity2(
                             )
 
                             measurement2(
-                                colorimeter,
-                                half_size,
-                                vrange,
-                                nd,
-                                xyz_list,
-                                RX_str,
-                                binn,
-                                exposure,
-                                module_id,
-                                cali_config,
-                                save_config,
-                                roi_dict,
-                                ffc_ws,
-                                fourcolor_ws,
-                                ffc_wb,
-                                fourcolor_wb,
-                                ffc_xlsx,
-                                fourcolor_xlsx
-                            )
+                                colorimeter=colorimeter,
+                                half_size=half_size,
+                                vrange=vrange,
+                                nd=nd,
+                                xyz_list=xyz_list,
+                                RX_str=RX_str,
+                                binn=binn,
+                                exposure=exposure,
+                                module_id=module_id,
+                                cali_config=cali_config,
+                                save_config=save_config,
+                                roi_dict=roi_dict,
+                                ffc_ws=ffc_ws,
+                                fourcolor_ws=fourcolor_ws,
+                                ffc_wb=ffc_wb,
+                                fourcolor_wb=fourcolor_wb,
+                                ffc_xlsx=ffc_xlsx,
+                                fourcolor_xlsx=fourcolor_xlsx
+                            )  # type: ignore
                             update_status(f"measurement for rx: {RX_str}")

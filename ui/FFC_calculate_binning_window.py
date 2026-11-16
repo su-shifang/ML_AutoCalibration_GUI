@@ -34,7 +34,7 @@ class FFCCalculateBinningThread_1(QThread):
     def run(self):
         try:
             FFC_calculate_1(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -52,7 +52,7 @@ class FFCCalculateBinningThread_2(QThread):
     def run(self):
         try:
             FFC_calculate_2(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -70,7 +70,7 @@ class FFCCalculateBinningThread_4(QThread):
     def run(self):
         try:
             FFC_calculate_4(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -82,9 +82,9 @@ class FFCCalculateBinningWindow(QDialog):
         self.setWindowTitle("ffc calculate binning")
         self.setGeometry(200, 200, 800, 500)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
         self.intValidator = QIntValidator()
         self.dialog_title = "选择文件夹"
@@ -245,7 +245,7 @@ class FFCCalculateBinningWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:
@@ -274,7 +274,7 @@ class FFCCalculateBinningWindow(QDialog):
 
     def delete_roi(self):
         try:
-
+            
             current_item = self.roi_display.currentItem()
             if current_item is None:
                 QMessageBox.warning(self, "警告", "请先选择要删除的ROI", QMessageBox.Ok)

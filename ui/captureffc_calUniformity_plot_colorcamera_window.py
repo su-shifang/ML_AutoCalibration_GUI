@@ -36,7 +36,7 @@ class CaptureFFCThread(QThread):
     def run(self):
         try:
             capture_ffc_images2(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -55,7 +55,7 @@ class CalSyntheticThread(QThread):
     def run(self):
         try:
             cal_synthetic_mean_images2(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -74,7 +74,7 @@ class CalUniformityThread(QThread):
     def run(self):
         try:
             cal_uniformity2(
-                status_callback=self.status_update.emit, **self.parameters)
+                status_callback=self.status_update.emit, **self.parameters) # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -87,9 +87,9 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
         self.setWindowTitle("CaptureFFCCalUniformityPlot_ColorCamera")
         self.setGeometry(200, 200, 800, 500)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.setWindowIcon(QIcon(
-            "F:/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/dist/FingerPrintScanMTF.ico"))
+            "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
         self.intValidator = QIntValidator()
         self.doubleValidator = QDoubleValidator()
@@ -292,7 +292,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
         self.rgbw_btngroup.addButton(self.cb_G, 2)
         self.rgbw_btngroup.addButton(self.cb_B, 3)
         self.rgbw_btngroup.addButton(self.cb_W, 4)
-        self.rgbw_btngroup.idClicked.connect(self._rgbw_changed)
+        self.rgbw_btngroup.idClicked.connect(self._rgbw_changed) # type: ignore
 
         h_layout.addWidget(self.cb_R)
         h_layout.addWidget(self.cb_G)
@@ -398,7 +398,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
             self.start_capture_ffc()
 
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
             self.is_running = False
@@ -545,7 +545,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
             self.rx_config_window.config_saved.connect(self.update_rx_config)
             self.rx_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def _roi_config(self):
@@ -564,7 +564,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
                 self.update_roi_config)
             self.roi_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_rx_config(self, rx_map):
@@ -574,7 +574,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
                 nd_enum = mlcm.str_to_MLFilterEnum(nd_str)
                 self.rx_dict[nd_enum] = rx_list
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_roi_config(self, roi_map):
@@ -584,7 +584,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
                 self.roi_dict[binn] = roi_list
             pass
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def _open_folder_dialog(self):
@@ -593,7 +593,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:
@@ -634,7 +634,7 @@ class CaptureFFCCalUniformityPlotColorCameraWindow(QDialog):
                 self.update_config)
             self.exposure_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e,
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_config(self, exposure_map):

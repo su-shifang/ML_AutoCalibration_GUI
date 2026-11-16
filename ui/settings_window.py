@@ -21,7 +21,7 @@ class SettingsWindow(QDialog):
         self.setWindowTitle("Setting")
         self.setGeometry(300, 300, 500, 200)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
         self.dialog_title = dialog_title
         self.default_path = default_path
         self.previous_path = ""
@@ -57,7 +57,7 @@ class SettingsWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
         )
 
         if folder_path:
