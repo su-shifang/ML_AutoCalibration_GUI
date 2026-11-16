@@ -154,6 +154,11 @@ def mono_calibration(
         rad_folder_rule: str,
         expusure_offset: float = 0,
         gray_offset: float = 0,
+        exposure_time:float=100,
+        max_time:float=19000,
+        rate:int=1000000,
+        pixel_count:int=5000,
+        use_roi:bool=False,
         status_callback=None
 ):
     def update_status(message):
@@ -189,13 +194,13 @@ def mono_calibration(
         raise RuntimeError("ml_set_pixel_format error")
 
     exposure = mlcm.pyExposureSetting(
-        exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100
+        exposure_mode=mlcm.ExposureMode.Auto, exposure_time=exposure_time
     )
     results = []
     if nd_list == []:
         for gray in gray_range:
             aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
-                                       0.05, target_min=gray - 0.05, max_time=19000, rate=1000000)
+                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
             ret = mono.ml_update_AE_params(aeparams)
             if xyz_list == []:
                 mono.ml_set_exposure(exposure=exposure)
@@ -260,8 +265,8 @@ def mono_calibration(
         for nd in nd_list:
             mono.ml_move_nd_syn(nd)
             for gray in gray_range:
-                aeparams = mlcm.pyAEParams(
-                    dynamic_range=gray, target_max=gray + 0.05, target_min=gray - 0.05, max_time=19000, rate=1000000)
+                aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
+                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
                 ret = mono.ml_update_AE_params(aeparams)
                 if xyz_list == []:
                     mono.ml_set_exposure(exposure=exposure)
@@ -415,6 +420,11 @@ def mono_calibration_do_ffc(
         axis_list: List[int] = [0],
         expusure_offset: float = 0,
         gray_offset: float = 0,
+        exposure_time:float=100,
+        max_time:float=19000,
+        rate:int=1000000,
+        pixel_count:int=5000,
+        use_roi:bool=False,
         status_callback=None
 ):
     def update_status(message):
@@ -443,15 +453,15 @@ def mono_calibration_do_ffc(
 
     mono.ml_set_aperture(apturate)
     exposure = mlcm.pyExposureSetting(
-        exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100
+        exposure_mode=mlcm.ExposureMode.Auto, exposure_time=exposure_time
     )
     results = []
     capture_data_dict = dict()
     if is_rx:
         if nd_list == []:
             for gray in gray_range:
-                aeparams = mlcm.pyAEParams(
-                    dynamic_range=gray, target_max=gray + 0.05, target_min=gray - 0.05, max_time=19000, rate=1000000)
+                aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
+                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
                 ret = mono.ml_update_AE_params(aeparams)
                 for sph in sph_list:
                     for cyl in cyl_list:
@@ -595,8 +605,8 @@ def mono_calibration_do_ffc(
             for nd in nd_list:
                 mono.ml_move_nd_syn(nd)
                 for gray in gray_range:
-                    aeparams = mlcm.pyAEParams(
-                        dynamic_range=gray, target_max=gray + 0.05, target_min=gray - 0.05, max_time=19000, rate=1000000)
+                    aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
+                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
                     ret = mono.ml_update_AE_params(aeparams)
                     for sph in sph_list:
                         for cyl in cyl_list:
@@ -805,8 +815,8 @@ def mono_calibration_do_ffc(
     else:
         if nd_list == []:
             for gray in gray_range:
-                aeparams = mlcm.pyAEParams(
-                    dynamic_range=gray, target_max=gray + 0.05, target_min=gray - 0.05, max_time=19000, rate=1000000)
+                aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
+                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
                 ret = mono.ml_update_AE_params(aeparams)
                 if xyz_list == []:
                     mono.ml_set_exposure(exposure=exposure)
@@ -944,8 +954,8 @@ def mono_calibration_do_ffc(
             for nd in nd_list:
                 mono.ml_move_nd_syn(nd)
                 for gray in gray_range:
-                    aeparams = mlcm.pyAEParams(
-                        dynamic_range=gray, target_max=gray + 0.05, target_min=gray - 0.05, max_time=19000, rate=1000000)
+                    aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
+                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
                     ret = mono.ml_update_AE_params(aeparams)
                     if xyz_list == []:
                         mono.ml_set_exposure(exposure=exposure)
