@@ -84,6 +84,9 @@ def fourcolor_calibration_capture(
     ret = ml_mono.ml_set_rx_syn(rx=rx)
     if not ret.success:
         raise RuntimeError("ml_set_rx_syn error")
+    import sys
+    val=sys.float_info.max
+    rx.sph=val
     # capture M images and calculate M matrix
     ret = colorimeter.ml_capture_and_calMMatrix2(
         module_id=module_id,
