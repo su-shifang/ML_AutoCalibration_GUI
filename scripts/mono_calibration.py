@@ -8,14 +8,34 @@ import tkinter as tk
 from tkinter import messagebox
 import pandas as pd
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict,Callable,Optional,Literal
 import time
+import configparser
 import re
+MsgLevel = Literal["INFO", "WARN", "ERROR"]
 
+# ---------------------- camera configuration ----------------------
+BINNING_SELECTOR = mlcm.BinningSelector.Logic
+BINNING = mlcm.Binning.ONE_BY_ONE
+BINNING_MODE = mlcm.BinningMode.AVERAGE
+PIXEL_FORMAT = mlcm.MLPixelFormat.MLMono12
+TARGET_GRAY_RATIO = 0.8  # 存入数据取0.8的
+SLEEP_INTERVAL = 1.0
 
 # 创建文件夹
 def create_directory(path):
     os.makedirs(path, exist_ok=True)
+
+
+# Function to show a message box with the light source information
+def show_message(light_source):
+    # Create a hidden root window
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window
+    # Show the message box
+    messagebox.showinfo("提示", "请切换光源到: " + light_source)
+    root.destroy()
+
 
 # 保存json数据到文件
 
@@ -132,16 +152,58 @@ def generate_folder_name(folder_rule: str, aperture: str = "",
     return folder_name
 
 
+def get_lum_rad_folder_rule(config_path: str):
+    lum_folder_rule = ''
+    rad_folder_rule = ''
+    ini_path = os.path.join(config_path, "config.ini")
+    if not os.path.exists(ini_path):
+        print(f"Configuration file not found: {ini_path}")
+        return None, None
+
+    config = configparser.ConfigParser()
+    try:
+        msg=""
+        config.read(ini_path, encoding='utf-8')
+
+        if 'Luminance' in config:
+            lum_folder_rule = config['Luminance'].get(
+                'Folder_Rule', '').strip()
+            lum_suffix = config['Luminance'].get('Suffix', '').strip()
+        else:
+            msg="config.ini文件中缺少Luminance部分, 请检查eye1路径下的文件"
+            return None, None,msg
+
+        if 'Radiance' in config:
+            rad_folder_rule = config['Radiance'].get('Folder_Rule', '').strip()
+            rad_suffix = config['Radiance'].get('Suffix', '').strip()
+        else:
+            msg="config.ini文件中缺少Radiance部分, 请检查eye1路径下的文件"
+            return None, None,msg
+        return lum_folder_rule, rad_folder_rule,msg
+    except Exception as e:
+        msg = f"读取config.ini文件失败: {str(e)}"
+        return None, None,msg
+
+
+
+def update_status(level: MsgLevel, message: str, callback: Optional[Callable[[MsgLevel, str], None]] = None):
+    '''全局统一状态日志打印/回调'''
+    msg = f"[{level}] {message}"
+    if callback is not None:
+        try:
+            callback(level, msg)
+        except Exception:
+            # 回调出错不中断采集，降级打印到控制台
+            print(msg)
+    else:
+        print(msg)
+
 def mono_calibration(
         colorimeter: mlcm.ML_Colorimeter,
-        binn_selector: mlcm.BinningSelector,
-        binn_mode: mlcm.BinningMode,
-        binn: mlcm.Binning,
-        pixel_format: mlcm.MLPixelFormat,
         nd_list: List[mlcm.MLFilterEnum],
         xyz_list: List[mlcm.MLFilterEnum],
         gray_range: List[float],
-        apturate: str,
+        aperture: str,
         light_source: str,
         luminance_values: Dict[mlcm.MLFilterEnum, float],
         luminance_no_xyz: float,
@@ -152,246 +214,192 @@ def mono_calibration(
         roi_size: List[int],
         lum_folder_rule: str,
         rad_folder_rule: str,
+        binn_selector: mlcm.BinningSelector = mlcm.BinningSelector.Logic,
+        binn_mode: mlcm.BinningMode = mlcm.BinningMode.AVERAGE,
+        binn: mlcm.Binning = mlcm.Binning.ONE_BY_ONE,
+        pixel_format: mlcm.MLPixelFormat = mlcm.MLPixelFormat.MLMono12,
+        do_nd: bool = True,
+        do_xyz: bool = True,
         expusure_offset: float = 0,
         gray_offset: float = 0,
-        exposure_time:float=100,
-        max_time:float=19000,
-        rate:int=1000000,
-        pixel_count:int=5000,
-        use_roi:bool=False,
-        status_callback=None
+        exposure_time: float = 100,
+        max_time: float = 19000,
+        rate: int = 1000000,
+        pixel_count: int = 5000,
+        use_roi: bool = False,
+        save_image: bool = False,
+        status_callback: Optional[Callable[[MsgLevel, str], None]] = None
 ):
-    def update_status(message):
-        if status_callback:
-            status_callback(message)
-    if len(image_point) >= 2:
+    try:
+        update_status("INFO", "mono_calibration start", status_callback)
+                    
+        if len(image_point) < 2 or len(roi_size) < 2:
+            raise ValueError(
+                "image_point and roi_size must cotain at least 2 elements")
         image_x = int(image_point[0])
         image_y = int(image_point[1])
-    if len(roi_size) >= 2:
         roi_width = int(roi_size[0])
         roi_height = int(roi_size[1])
-    module_id = 1
-    mono = colorimeter.ml_bino_manage.ml_get_module_by_id(module_id)
-    # set light source
-    mono.ml_set_light_source(light_source)
+        module_id = 1
+        mono = colorimeter.ml_bino_manage.ml_get_module_by_id(module_id)
+        # set light source
+        ret = mono.ml_set_light_source(light_source)
+        if not ret.success:
+            raise RuntimeError(
+                f"ml_set_light_source error, msg: {ret.message}")
 
-    ret = mono.ml_set_binning_selector(binn_selector)
-    if not ret.success:
-        raise RuntimeError("ml_set_binning_selector error")
+        ret = mono.ml_set_binning_selector(binn_selector)
+        if not ret.success:
+            raise RuntimeError(
+                f"ml_set_binning_selector error, msg: {ret.message}")
 
-    # Set binning mode for camera.
-    ret = mono.ml_set_binning_mode(binn_mode)
-    if not ret.success:
-        raise RuntimeError("ml_set_binning_mode error")
+        # Set binning mode for camera.
+        ret = mono.ml_set_binning_mode(binn_mode)
+        if not ret.success:
+            raise RuntimeError(
+                f"ml_set_binning_mode error, msg: {ret.message}")
 
-    ret = mono.ml_set_binning(binn)
-    if not ret.success:
-        raise RuntimeError("ml_set_binning error")
+        ret = mono.ml_set_binning(binn)
+        if not ret.success:
+            raise RuntimeError(f"ml_set_binning error, msg: {ret.message}")
 
-    # Format of the pixel to use for acquisition.
-    ret = mono.ml_set_pixel_format(pixel_format)
-    if not ret.success:
-        raise RuntimeError("ml_set_pixel_format error")
+        # Format of the pixel to use for acquisition.
+        ret = mono.ml_set_pixel_format(pixel_format)
+        if not ret.success:
+            raise RuntimeError(
+                f"ml_set_pixel_format error, msg: {ret.message}")
 
-    exposure = mlcm.pyExposureSetting(
-        exposure_mode=mlcm.ExposureMode.Auto, exposure_time=exposure_time
-    )
-    results = []
-    if nd_list == []:
-        for gray in gray_range:
-            aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
-                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
-            ret = mono.ml_update_AE_params(aeparams)
-            if xyz_list == []:
-                mono.ml_set_exposure(exposure=exposure)
-                mono.ml_capture_image_syn()
-                img = mono.ml_get_image()
-                average_gray = process_image(
-                    img, image_x, image_y, roi_width, roi_height)
-                average_gray += gray_offset
-                exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                update_status(
-                    f"{str(gray)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                luminance_k = luminance_no_xyz / gray_ET if gray_ET > 0 else 0
-                radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                results.append({
-                    "Gray Range": f"{gray * 100}" + "%",
-                    "NDFilter": "None",
-                    "AVEGray": average_gray,
-                    "ExposureTime": exposure_time,
-                    "G/ET": gray_ET,
-                    "Luminance": luminance_no_xyz,
-                    "K(L)": luminance_k,
-                    "Radiance": radiance,
-                    "K(R)": radiance_k
-                })
-            else:
-                for xyz in xyz_list:
-                    Luminance = luminance_values[xyz]
-                    # move color filter
-                    mono.ml_move_xyz_syn(xyz)
-                    # set exposure by pyExposureSetting
-                    mono.ml_set_exposure(exposure=exposure)
-                    # capture single image from camera
-                    mono.ml_capture_image_syn()
-                    img = mono.ml_get_image()
-                    # mono calibration
-                    average_gray = process_image(
-                        img, image_x, image_y, roi_width, roi_height)
-                    average_gray += gray_offset
-                    # get exposure time
-                    exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                    update_status(
-                        f"{str(gray)}_{mlcm.MLFilterEnum_to_str(xyz)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                    gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                    luminance_k = Luminance / gray_ET if gray_ET > 0 else 0
-                    radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                    # add result to the list
-                    results.append({
-                        "Gray Range": f"{gray * 100}" + "%",
-                        "NDFilter": "None",
-                        "XYZFilter": mlcm.MLFilterEnum_to_str(xyz),
-                        "AVEGray": average_gray,
-                        "ExposureTime": exposure_time,
-                        "G/ET": gray_ET,
-                        "Luminance": Luminance,
-                        "K(L)": luminance_k,
-                        "Radiance": radiance,
-                        "K(R)": radiance_k
-                    })
+        exposure = mlcm.pyExposureSetting(
+            exposure_mode=mlcm.ExposureMode.Auto, exposure_time=exposure_time
+        )
+        results = []
 
-    else:
-        for nd in nd_list:
-            mono.ml_move_nd_syn(nd)
+        # 构建ND循环列表，同一逻辑： 无ND时，用一个空占位
+        nd_loop = nd_list if do_nd else [None]
+        for nd in nd_loop:
+            nd_str = "None"
+            if nd is not None:
+                nd_str = mlcm.MLFilterEnum_to_str(nd)
+                ret = mono.ml_move_nd_syn(nd)
+                if not ret.success:
+                    raise RuntimeError(
+                        f"ml_move_nd_syn error, msg: {ret.message}")
             for gray in gray_range:
-                aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
-                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
+                aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray + 0.05, target_min=gray - 0.05,
+                                           max_time=max_time, rate=rate, pixel_count=pixel_count, use_roi=use_roi)
                 ret = mono.ml_update_AE_params(aeparams)
-                if xyz_list == []:
-                    mono.ml_set_exposure(exposure=exposure)
-                    mono.ml_capture_image_syn()
+                if not ret.success:
+                    raise RuntimeError(
+                        f"ml_update_AE_params error at gray={gray}, msg: {ret.message}")
+                # XYZ循环, 无XYZ时，用一个空占位
+                xyz_loop = xyz_list if do_xyz else [None]
+                for xyz in xyz_loop:
+                    xyz_str = "None"
+                    if xyz is not None:
+                        xyz_str = mlcm.MLFilterEnum_to_str(xyz)
+                        ret = mono.ml_move_xyz_syn(xyz)
+                        if not ret.success:
+                            raise RuntimeError(
+                                f"ml_move_xyz_syn error, msg: {ret.message}")
+                    ret = mono.ml_set_exposure(exposure=exposure)
+                    if not ret.success:
+                        raise RuntimeError(
+                            f"ml_set_exposure error, msg: {ret.message}")
+                    ret = mono.ml_capture_image_syn()
+                    if not ret.success:
+                        raise RuntimeError(
+                            f"ml_capture_image_syn error, msg: {ret.message}")
                     img = mono.ml_get_image()
+                    if save_image:
+                        cv2.imwrite(os.path.join(
+                            out_path, f"{gray}_{nd_str}_{xyz_str}.tif"), img)
                     average_gray = process_image(
                         img, image_x, image_y, roi_width, roi_height)
                     average_gray += gray_offset
-                    exposure_time = mono.ml_get_exposure_time() + expusure_offset
+                    current_et = mono.ml_get_exposure_time() + expusure_offset
+                    # 过程输出
                     update_status(
-                        f"{mlcm.MLFilterEnum_to_str(nd)}_{str(gray)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                    gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                    luminance_k = luminance_no_xyz / gray_ET if gray_ET > 0 else 0
+                        "INFO", f"{nd_str}_{gray}_{xyz_str}_averageGray: {average_gray:.2f}, exposureTime: {current_et:.2f}", status_callback)
+                    gray_ET = average_gray/current_et if current_et > 0 else 0
+                    # 亮度取值
+                    if xyz is not None:
+                        lum_val = luminance_values[xyz]
+                    else:
+                        lum_val = luminance_no_xyz
+                    luminance_k = lum_val / gray_ET if gray_ET > 0 else 0
                     radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                    results.append({
-                        "Gray Range": f"{gray * 100}" + "%",
-                        "NDFilter": mlcm.MLFilterEnum_to_str(nd),
+                    # 存入结果
+                    row = {
+                        "GrayRaw": gray,
+                        "Gray Range": f"{gray * 100:.1f}%",
+                        "NDFilter": nd_str,
+                        "XYZFilter": xyz_str,
                         "AVEGray": average_gray,
-                        "ExposureTime": exposure_time,
+                        "ExposureTime": current_et,
                         "G/ET": gray_ET,
-                        "Luminance": luminance_no_xyz,
+                        "Luminance": lum_val,
                         "K(L)": luminance_k,
                         "Radiance": radiance,
                         "K(R)": radiance_k
-                    })
-                else:
-                    for xyz in xyz_list:
-                        Luminance = luminance_values[xyz]
-                        # move color filter
-                        mono.ml_move_xyz_syn(xyz)
-                        # set exposure by pyExposureSetting
-                        mono.ml_set_exposure(exposure=exposure)
-                        # capture single image from camera
-                        mono.ml_capture_image_syn()
-                        img = mono.ml_get_image()
-                        # mono calibration
-                        average_gray = process_image(
-                            img, image_x, image_y, roi_width, roi_height)
-                        average_gray += gray_offset
-                        # get exposure time
-                        exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                        update_status(
-                            f"{mlcm.MLFilterEnum_to_str(nd)}_{str(gray)}_{mlcm.MLFilterEnum_to_str(xyz)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                        gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                        luminance_k = Luminance / gray_ET if gray_ET > 0 else 0
-                        radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                        # add result to the list
-                        results.append({
-                            "Gray Range": f"{gray * 100}" + "%",
-                            "NDFilter": mlcm.MLFilterEnum_to_str(nd),
-                            "XYZFilter": mlcm.MLFilterEnum_to_str(xyz),
-                            "AVEGray": average_gray,
-                            "ExposureTime": exposure_time,
-                            "G/ET": gray_ET,
-                            "Luminance": Luminance,
-                            "K(L)": luminance_k,
-                            "Radiance": radiance,
-                            "K(R)": radiance_k
-                        })
+                    }
+                    results.append(row)
+        time.sleep(SLEEP_INTERVAL)
 
-    time.sleep(1)
-    update_status("写入配置中...")
-
-    # 将results中灰度值在80%的luminance_k和radiance_k写入配置文件，b为0
-    for item in results:
-        if item["Gray Range"] == "80.0%":
-            if nd_list == []:
-                if xyz_list == []:
-                    lum_file_name = generate_folder_name(
-                        lum_folder_rule, apturate, light_source, "", "")
-                    rad_file_name = generate_folder_name(
-                        rad_folder_rule, apturate, light_source, "", "")
-                else:
-                    xyz_filter = item["XYZFilter"]
-                    lum_file_name = generate_folder_name(
-                        lum_folder_rule, apturate, light_source, "", xyz_filter)
-                    rad_file_name = generate_folder_name(
-                        rad_folder_rule, apturate, light_source, "", xyz_filter)
-            else:
-                # 文件夹命名格式为Aperture_NDFilter_LightSource
-                nd_filter = item["NDFilter"]
-                if xyz_list == []:
-                    lum_file_name = generate_folder_name(
-                        lum_folder_rule, apturate, light_source, nd_filter, "")
-                    rad_file_name = generate_folder_name(
-                        rad_folder_rule, apturate, light_source, nd_filter, "")
-                else:
-                    xyz_filter = item["XYZFilter"]
-                    lum_file_name = generate_folder_name(
-                        lum_folder_rule, apturate, light_source, nd_filter, xyz_filter)
-                    rad_file_name = generate_folder_name(
-                        rad_folder_rule, apturate, light_source, nd_filter, xyz_filter)
-            luminance_k = item["K(L)"]
-            radiance_k = item["K(R)"]
+        update_status("INFO", "写入配置中...")
+        target_items = [item for item in results if np.isclose(
+            item["GrayRaw"], TARGET_GRAY_RATIO)]
+        if len(target_items) == 0:
+            update_status(
+                "WARN", "未测试或未找到80%灰度对应数据，跳过写入Luminance/Radiance JSON", status_callback)
+        else:
+            update_status(
+                "INFO", f"找到 {len(target_items)} 条80%灰度匹配记录，开始生成配置文件夹", status_callback)
             luminance_config_path = os.path.join(eye1_path, "Luminance")
             create_directory(luminance_config_path)
             radiance_config_path = os.path.join(eye1_path, "Radiance")
             create_directory(radiance_config_path)
+            for item in target_items:
+                nd_filter = item["NDFilter"]
+                xyz_filter = item["XYZFilter"]
+                lum_file_name = generate_folder_name(
+                    lum_folder_rule, aperture, light_source, nd_filter, xyz_filter)
+                rad_file_name = generate_folder_name(
+                    rad_folder_rule, aperture, light_source, nd_filter, xyz_filter)
+                luminance_k = item["K(L)"]
+                radiance_k = item["K(R)"]
+                luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(
+                    luminance_config_path, lum_file_name)
+                os.makedirs(luminance_file_path, exist_ok=True)
+                # 完整的文件路径
+                luminance_json_file_path = os.path.join(
+                    luminance_file_path, "Luminance.json")
+                # 创建要写入的字典
+                data = {
+                    "Luminance": [[float(luminance_k), 0]]
+                }
+                save_json(data, luminance_json_file_path)
 
-            luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(
-                luminance_config_path, lum_file_name)
-            os.makedirs(luminance_file_path, exist_ok=True)
-            # 完整的文件路径
-            luminance_json_file_path = os.path.join(
-                luminance_file_path, "Luminance.json")
-            # 创建要写入的字典
-            data = {
-                "Luminance": [[float(luminance_k), 0]]
-            }
-            save_json(data, luminance_json_file_path)
-
-            radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(
-                radiance_config_path, rad_file_name)
-            os.makedirs(radiance_file_path, exist_ok=True)
-            # 完整的文件路径
-            radiance_json_file_path = os.path.join(
-                radiance_file_path, "Radiance.json")
-            # 创建要写入的字典
-            data1 = {
-                "Radiance": [[float(radiance_k), 0]]
-            }
-            save_json(data1, radiance_json_file_path)
-    time.sleep(1)
-    update_status("写入完成，保存数据表")
-    save_results_to_excel(results, out_path)
+                radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(
+                    radiance_config_path, rad_file_name)
+                os.makedirs(radiance_file_path, exist_ok=True)
+                # 完整的文件路径
+                radiance_json_file_path = os.path.join(
+                    radiance_file_path, "Radiance.json")
+                # 创建要写入的字典
+                data1 = {
+                    "Radiance": [[float(radiance_k), 0]]
+                }
+                save_json(data1, radiance_json_file_path)
+                update_status(
+                    "INFO", f"处理记录: ND={nd_filter}, XYZ={xyz_filter}, K(L)={luminance_k:.4f}", status_callback)
+        time.sleep(SLEEP_INTERVAL)
+        update_status("INFO", f"写入完成，保存数据表到: {out_path}", status_callback)
+        save_results_to_excel(results, out_path)
+    except Exception as e:
+        # 只要发生任何异常，都会先推送ERROR消息给UI
+        err_msg = f"{type(e).__name__}: {str(e)}"
+        update_status("ERROR", err_msg, status_callback)
+        raise
 
 
 def mono_calibration_do_ffc(
@@ -403,7 +411,7 @@ def mono_calibration_do_ffc(
         nd_list: List[mlcm.MLFilterEnum],
         xyz_list: List[mlcm.MLFilterEnum],
         gray_range: List[float],
-        apturate: str,
+        aperture: str,
         light_source: str,
         luminance_values: Dict[mlcm.MLFilterEnum, float],
         luminance_no_xyz: float,
@@ -414,7 +422,8 @@ def mono_calibration_do_ffc(
         roi_size: List[int],
         lum_folder_rule: str,
         rad_folder_rule: str,
-        is_rx: bool = False,
+        do_nd: bool = True,
+        do_xyz: bool = True,
         sph_list: List[float] = [0.0],
         cyl_list: List[float] = [0.0],
         axis_list: List[int] = [0],
@@ -425,206 +434,72 @@ def mono_calibration_do_ffc(
         rate:int=1000000,
         pixel_count:int=5000,
         use_roi:bool=False,
-        status_callback=None
+        status_callback: Optional[Callable[[MsgLevel, str], None]] = None
 ):
-    def update_status(message):
-        if status_callback:
-            status_callback(message)
-
-    image_x, image_y = map(int, image_point[:2]) if len(
-        image_point) >= 2 else (0, 0)
-    roi_width, roi_height = map(int, roi_size[:2]) if len(
-        roi_size) >= 2 else (0, 0)
-
-    module_id = 1
-    mono = colorimeter.ml_bino_manage.ml_get_module_by_id(module_id)
-    # set light source
-    mono.ml_set_light_source(light_source)
-    configurations = {
-        "binning_selector": binn_selector,
-        "binning_mode": binn_mode,
-        "binning": binn,
-        "pixel_format": pixel_format
-    }
-    for config_name, config_value in configurations.items():
-        ret = getattr(mono, f'ml_set_{config_name}')(config_value)
+    try:
+        update_status("INFO", "mono_calibration_do_ffc start", status_callback)
+        if len(image_point) < 2 or len(roi_size) < 2:
+            raise ValueError("image_point and roi_size must contain at least 2 elements")
+        image_x = int(image_point[0])
+        image_y = int(image_point[1])
+        roi_width = int(roi_size[0])
+        roi_height = int(roi_size[1])
+        module_id = 1
+        mono = colorimeter.ml_bino_manage.ml_get_module_by_id(module_id)
+        # set light source
+        ret = mono.ml_set_light_source(light_source)
         if not ret.success:
-            raise RuntimeError(f"ml_set_{config_name} error")
+            raise RuntimeError(f"ml_set_light_source error, msg: {ret.message}")
+        # 统一设置相机参数，和mono_calibration对齐
+        cfg_set = [
+            ("binning_selector", binn_selector),
+            ("binning_mode", binn_mode),
+            ("binning", binn),
+            ("pixel_format", pixel_format),
+        ]
+        for cfg_name, cfg_val in cfg_set:
+            ret = getattr(mono, f'ml_set_{cfg_name}')(cfg_val)
+            if not ret.success:
+                raise RuntimeError(f"ml_set_{cfg_name} error, msg: {ret.message}")
 
-    mono.ml_set_aperture(apturate)
-    exposure = mlcm.pyExposureSetting(
-        exposure_mode=mlcm.ExposureMode.Auto, exposure_time=exposure_time
-    )
-    results = []
-    capture_data_dict = dict()
-    if is_rx:
-        if nd_list == []:
+        ret = mono.ml_set_aperture(aperture)
+        if not ret.success:
+            raise RuntimeError(f"ml_set_aperture error, msg: {ret.message}")
+        exposure = mlcm.pyExposureSetting(
+            exposure_mode=mlcm.ExposureMode.Auto, exposure_time=exposure_time
+        )
+        results = []
+        nd_loop = nd_list if do_nd else [None]
+        for nd in nd_loop:
+            nd_str="None"
+            if nd is not None:
+                nd_str=mlcm.MLFilterEnum_to_str(nd)
+                ret = mono.ml_move_nd_syn(nd)
+                if not ret.success:
+                    raise RuntimeError(f"ml_move_nd_syn error, msg: {ret.message}")
             for gray in gray_range:
                 aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
-                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
+                                        0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
                 ret = mono.ml_update_AE_params(aeparams)
+                if not ret.success:
+                    raise RuntimeError(f"ml_update_AE_params error at gray={gray}, msg: {ret.message}")
                 for sph in sph_list:
-                    for cyl in cyl_list:
-                        for axis in axis_list:
-                            rx = mlcm.pyRXCombination(
-                                sph=sph, cyl=cyl, axis=axis)
-                            ret = mono.ml_set_rx_syn(rx)
-                            RX_str = mlcm.pyRXCombination_to_str(rx)
-                            if not ret.success:
-                                raise RuntimeError("ml_set_rx_syn error")
-                            cali_config = mlcm.pyCalibrationConfig(
-                                input_path=mono.ml_get_config_path(),
-                                aperture=mono.ml_get_aperture(),
-                                nd_filter_list=[mlcm.MLFilterEnum.ND0],
-                                color_filter_list=xyz_list,
-                                rx=rx,
-                                light_source_list=[mono.ml_get_light_source()],
-                                dark_flag=True,
-                                ffc_flag=True,
-                                color_shift_flag=False,
-                                distortion_flag=False,
-                                exposure_flag=False,
-                                four_color_flag=False
-                            )
-                            if xyz_list == []:
-                                cali_config.color_filter_list = [
-                                    mlcm.MLFilterEnum.X]
-                                mono.ml_set_exposure(exposure=exposure)
-                                mono.ml_capture_image_syn()
-                                capture_data = mono.ml_get_CaptureData()
-                                # 这里给一个默认XYZ值
-                                capture_data_dict[mlcm.MLFilterEnum.X] = capture_data
-                                # set capture data for measurement
-                                ret = colorimeter.ml_set_CaptureData(
-                                    module_id, capture_data_dict)
-                                if not ret.success:
-                                    raise RuntimeError(
-                                        "ml_set_CaptureData error")
-                                # load calibration data by calbration config
-                                ret = colorimeter.ml_load_calibration_data(
-                                    cali_config)
-                                if not ret.success:
-                                    raise RuntimeError(
-                                        "ml_load_calibration_data error")
-
-                                # execute calibration process for capture data by calibration config
-                                ret = colorimeter.ml_image_process(cali_config)
-                                if not ret.success:
-                                    raise RuntimeError(
-                                        "ml_image_process error")
-
-                                # get calibration data after calibration process
-                                processed_data = colorimeter.ml_get_processed_data(
-                                    module_id)
-
-                                img = processed_data[mlcm.CalibrationEnum.FFC][mlcm.MLFilterEnum.X].image
-
-                                average_gray = process_image(
-                                    img, image_x, image_y, roi_width, roi_height)
-                                average_gray += gray_offset
-                                exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                                update_status(
-                                    f"{str(gray)}_{RX_str}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                                gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                                luminance_k = luminance_no_xyz / gray_ET if gray_ET > 0 else 0
-                                radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                                results.append({
-                                    "Gray Range": f"{gray * 100}" + "%",
-                                    "NDFilter": "None",
-                                    "RX": RX_str,
-                                    "AVEGray": average_gray,
-                                    "ExposureTime": exposure_time,
-                                    "G/ET": gray_ET,
-                                    "Luminance": luminance_no_xyz,
-                                    "K(L)": luminance_k,
-                                    "Radiance": radiance,
-                                    "K(R)": radiance_k
-                                })
-                            else:
-                                for xyz in xyz_list:
-                                    # move color filter
-                                    mono.ml_move_xyz_syn(xyz)
-                                    # set exposure by pyExposureSetting
-                                    mono.ml_set_exposure(exposure=exposure)
-                                    mono.ml_capture_image_syn()
-                                    capture_data = mono.ml_get_CaptureData()
-                                    capture_data_dict[xyz] = capture_data
-                                # set capture data for measurement
-                                ret = colorimeter.ml_set_CaptureData(
-                                    module_id, capture_data_dict)
-                                if not ret.success:
-                                    raise RuntimeError(
-                                        "ml_set_CaptureData error")
-                                # load calibration data by calbration config
-                                ret = colorimeter.ml_load_calibration_data(
-                                    cali_config)
-                                if not ret.success:
-                                    raise RuntimeError(
-                                        "ml_load_calibration_data error")
-
-                                # execute calibration process for capture data by calibration config
-                                ret = colorimeter.ml_image_process(cali_config)
-                                if not ret.success:
-                                    raise RuntimeError(
-                                        "ml_image_process error")
-
-                                # get calibration data after calibration process
-                                processed_data = colorimeter.ml_get_processed_data(
-                                    module_id)
-                                for xyz in xyz_list:
-                                    Luminance = luminance_values[xyz]
-                                    # capture single image from camera
-                                    img = processed_data[mlcm.CalibrationEnum.FFC][xyz].image
-                                    # mono calibration
-                                    average_gray = process_image(
-                                        img, image_x, image_y, roi_width, roi_height)
-                                    average_gray += gray_offset
-                                    # get exposure time
-                                    exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                                    update_status(
-                                        f"{str(gray)}_{mlcm.MLFilterEnum_to_str(xyz)}_{RX_str}__averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                                    gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                                    luminance_k = Luminance / gray_ET if gray_ET > 0 else 0
-                                    radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                                    # add result to the list
-                                    results.append({
-                                        "Gray Range": f"{gray * 100}" + "%",
-                                        "NDFilter": "None",
-                                        "XYZFilter": mlcm.MLFilterEnum_to_str(xyz),
-                                        "RX": RX_str,
-                                        "AVEGray": average_gray,
-                                        "ExposureTime": exposure_time,
-                                        "G/ET": gray_ET,
-                                        "Luminance": Luminance,
-                                        "K(L)": luminance_k,
-                                        "Radiance": radiance,
-                                        "K(R)": radiance_k
-                                    })
-
-        else:
-            for nd in nd_list:
-                mono.ml_move_nd_syn(nd)
-                for gray in gray_range:
-                    aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
-                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
-                    ret = mono.ml_update_AE_params(aeparams)
-                    for sph in sph_list:
                         for cyl in cyl_list:
                             for axis in axis_list:
                                 rx = mlcm.pyRXCombination(
                                     sph=sph, cyl=cyl, axis=axis)
                                 ret = mono.ml_set_rx_syn(rx)
                                 if not ret.success:
-                                    raise RuntimeError("ml_set_rx_syn error")
+                                    raise RuntimeError(f"ml_set_rx_syn error, msg: {ret.message}")
                                 RX_str = mlcm.pyRXCombination_to_str(rx)
+                                capture_data_dict: Dict[mlcm.MLFilterEnum, mlcm.pyCaptureData] = dict()
                                 cali_config = mlcm.pyCalibrationConfig(
                                     input_path=mono.ml_get_config_path(),
                                     aperture=mono.ml_get_aperture(),
-                                    nd_filter_list=[nd],
-                                    color_filter_list=xyz_list,
+                                    nd_filter_list=[nd] if nd is not None else [mlcm.MLFilterEnum.ND0],
+                                    color_filter_list=xyz_list if xyz_list else [mlcm.MLFilterEnum.X],
                                     rx=rx,
-                                    light_source_list=[
-                                        mono.ml_get_light_source()],
+                                    light_source_list=[mono.ml_get_light_source()],
                                     dark_flag=True,
                                     ffc_flag=True,
                                     color_shift_flag=False,
@@ -632,49 +507,47 @@ def mono_calibration_do_ffc(
                                     exposure_flag=False,
                                     four_color_flag=False
                                 )
-                                if xyz_list == []:
-                                    cali_config.color_filter_list = [
-                                        mlcm.MLFilterEnum.X]
-                                    mono.ml_set_exposure(exposure=exposure)
-                                    mono.ml_capture_image_syn()
+
+                                if do_xyz:
+                                    ret=mono.ml_set_exposure(exposure=exposure)
+                                    if not ret.success:
+                                        raise RuntimeError(f"ml_set_exposure error, msg: {ret.message}")
+                                    ret = mono.ml_capture_image_syn()
+                                    if not ret.success:
+                                        raise RuntimeError(f"ml_capture_image_syn error, msg: {ret.message}")
                                     capture_data = mono.ml_get_CaptureData()
+                                    # 这里给一个默认XYZ值
                                     capture_data_dict[mlcm.MLFilterEnum.X] = capture_data
-                                    # set capture data for measurement
-                                    ret = colorimeter.ml_set_CaptureData(
-                                        module_id, capture_data_dict)
+                                    ret = colorimeter.ml_set_CaptureData(module_id, capture_data_dict)
                                     if not ret.success:
-                                        raise RuntimeError(
-                                            "ml_set_CaptureData error")
+                                        raise RuntimeError(f"ml_set_CaptureData error, msg: {ret.message}")
                                     # load calibration data by calbration config
-                                    ret = colorimeter.ml_load_calibration_data(
-                                        cali_config)
+                                    ret = colorimeter.ml_load_calibration_data(cali_config)
                                     if not ret.success:
-                                        raise RuntimeError(
-                                            "ml_load_calibration_data error")
+                                        raise RuntimeError(f"ml_load_calibration_data error, msg: {ret.message}")
 
                                     # execute calibration process for capture data by calibration config
-                                    ret = colorimeter.ml_image_process(
-                                        cali_config)
+                                    ret = colorimeter.ml_image_process(cali_config)
                                     if not ret.success:
-                                        raise RuntimeError(
-                                            "ml_image_process error")
+                                        raise RuntimeError(f"ml_image_process error, msg: {ret.message}")
 
                                     # get calibration data after calibration process
-                                    processed_data = colorimeter.ml_get_processed_data(
-                                        module_id)
+                                    processed_data = colorimeter.ml_get_processed_data(module_id)
+
                                     img = processed_data[mlcm.CalibrationEnum.FFC][mlcm.MLFilterEnum.X].image
-                                    average_gray = process_image(
-                                        img, image_x, image_y, roi_width, roi_height)
+                                    average_gray = process_image(img, image_x, image_y, roi_width, roi_height)
                                     average_gray += gray_offset
                                     exposure_time = mono.ml_get_exposure_time() + expusure_offset
                                     update_status(
-                                        f"{mlcm.MLFilterEnum_to_str(nd)}_{str(gray)}_{RX_str}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
+                                        f"{str(gray)}_{RX_str}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
                                     gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
                                     luminance_k = luminance_no_xyz / gray_ET if gray_ET > 0 else 0
                                     radiance_k = radiance / gray_ET if gray_ET > 0 else 0
                                     results.append({
-                                        "Gray Range": f"{gray * 100}" + "%",
-                                        "NDFilter": mlcm.MLFilterEnum_to_str(nd),
+                                        "GrayRaw": gray,
+                                        "Gray Range": f"{gray * 100:.1f}" + "%",
+                                        "NDFilter": nd_str,
+                                        "XYZFilter": "None",
                                         "RX": RX_str,
                                         "AVEGray": average_gray,
                                         "ExposureTime": exposure_time,
@@ -686,470 +559,165 @@ def mono_calibration_do_ffc(
                                     })
                                 else:
                                     for xyz in xyz_list:
-                                        # move color filter
-                                        mono.ml_move_xyz_syn(xyz)
-                                        # set exposure by pyExposureSetting
-                                        mono.ml_set_exposure(exposure=exposure)
-                                        # capture single image from camera
-                                        mono.ml_capture_image_syn()
-
+                                        ret = mono.ml_move_xyz_syn(xyz)
+                                        if not ret.success:
+                                            raise RuntimeError(f"ml_move_xyz_syn error, msg: {ret.message}")
+                                        ret = mono.ml_set_exposure(exposure=exposure)
+                                        if not ret.success:
+                                            raise RuntimeError(f"ml_set_exposure error, msg: {ret.message}")
+                                        ret = mono.ml_capture_image_syn()
+                                        if not ret.success:
+                                            raise RuntimeError(f"ml_capture_image_syn error, msg: {ret.message}")
                                         capture_data = mono.ml_get_CaptureData()
                                         capture_data_dict[xyz] = capture_data
-                                    # set capture data for measurement
-                                    ret = colorimeter.ml_set_CaptureData(
-                                        module_id, capture_data_dict)
-                                    if not ret.success:
-                                        raise RuntimeError(
-                                            "ml_set_CaptureData error")
-                                    # load calibration data by calbration config
-                                    ret = colorimeter.ml_load_calibration_data(
-                                        cali_config)
-                                    if not ret.success:
-                                        raise RuntimeError(
-                                            "ml_load_calibration_data error")
-
-                                    # execute calibration process for capture data by calibration config
-                                    ret = colorimeter.ml_image_process(
-                                        cali_config)
-                                    if not ret.success:
-                                        raise RuntimeError(
-                                            "ml_image_process error")
-
-                                    # get calibration data after calibration process
-                                    processed_data = colorimeter.ml_get_processed_data(
-                                        module_id)
-                                    for xyz in xyz_list:
-                                        Luminance = luminance_values[xyz]
+                                        ret = colorimeter.ml_set_CaptureData(module_id, capture_data_dict)
+                                        if not ret.success:
+                                            raise RuntimeError(f"ml_set_CaptureData error, msg: {ret.message}")
+                                        ret = colorimeter.ml_load_calibration_data(cali_config)
+                                        if not ret.success:
+                                            raise RuntimeError(f"ml_load_calibration_data error, msg: {ret.message}")
+                                        ret = colorimeter.ml_image_process(cali_config)
+                                        if not ret.success:
+                                            raise RuntimeError(f"ml_image_process error, msg: {ret.message}")
+                                        processed_data = colorimeter.ml_get_processed_data(module_id)
                                         img = processed_data[mlcm.CalibrationEnum.FFC][xyz].image
-                                        # mono calibration
-                                        average_gray = process_image(
-                                            img, image_x, image_y, roi_width, roi_height)
+                                        average_gray = process_image(img, image_x, image_y, roi_width, roi_height)
                                         average_gray += gray_offset
-                                        # get exposure time
-                                        exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                                        update_status(
-                                            f"{mlcm.MLFilterEnum_to_str(nd)}_{str(gray)}_{mlcm.MLFilterEnum_to_str(xyz)}_{RX_str}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                                        gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                                        luminance_k = Luminance / gray_ET if gray_ET > 0 else 0
+                                        current_et = mono.ml_get_exposure_time() + expusure_offset
+                                        gray_ET = average_gray / current_et if current_et > 0 else 0
+                                        L_val = luminance_values[xyz]
+                                        luminance_k = L_val / gray_ET if gray_ET > 0 else 0
                                         radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                                        # add result to the list
-                                        results.append({
-                                            "Gray Range": f"{gray * 100}" + "%",
-                                            "NDFilter": mlcm.MLFilterEnum_to_str(nd),
-                                            "XYZFilter": mlcm.MLFilterEnum_to_str(xyz),
+                                        xyz_str = mlcm.MLFilterEnum_to_str(xyz)
+                                        update_status("INFO", f"{nd_str}_{gray}_{xyz_str}_{RX_str}_averageGray:{average_gray:.2f}, exposureTime:{current_et:.2f}", status_callback)
+                                        row = {
+                                            "GrayRaw": gray,
+                                            "Gray Range": f"{gray * 100:.1f}%",
+                                            "NDFilter": nd_str,
+                                            "XYZFilter": xyz_str,
                                             "RX": RX_str,
                                             "AVEGray": average_gray,
-                                            "ExposureTime": exposure_time,
+                                            "ExposureTime": current_et,
                                             "G/ET": gray_ET,
-                                            "Luminance": Luminance,
+                                            "Luminance": L_val,
                                             "K(L)": luminance_k,
                                             "Radiance": radiance,
                                             "K(R)": radiance_k
-                                        })
+                                        }
+                                        results.append(row)
 
-        time.sleep(1)
-        update_status("写入配置中...")
+        time.sleep(SLEEP_INTERVAL)
+        update_status("INFO","写入配置中...",status_callback)
 
-        # 将results中灰度值在80%的luminance_k和radiance_k写入配置文件，b为0
-        for item in results:
-            if item["Gray Range"] == "80.0%":
-                if nd_list == []:
-                    if xyz_list == []:
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, "", "")
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, "", "")
-                    else:
-                        xyz_filter = item["XYZFilter"]
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, "", xyz_filter)
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, "", xyz_filter)
-                else:
-                    # 文件夹命名格式为Aperture_NDFilter_LightSource
-                    nd_filter = item["NDFilter"]
-                    if xyz_list == []:
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, nd_filter, "")
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, nd_filter, "")
-                    else:
-                        xyz_filter = item["XYZFilter"]
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, nd_filter, xyz_filter)
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, nd_filter, xyz_filter)
-                luminance_k = item["K(L)"]
-                radiance_k = item["K(R)"]
-                luminance_config_path = os.path.join(eye1_path, "Luminance")
-                create_directory(luminance_config_path)
-                radiance_config_path = os.path.join(eye1_path, "Radiance")
-                create_directory(radiance_config_path)
-
-                luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(
-                    luminance_config_path, lum_file_name)
-                os.makedirs(luminance_file_path, exist_ok=True)
-                # 完整的文件路径
-                luminance_json_file_path = os.path.join(
-                    luminance_file_path, "Luminance.json")
-                # 创建要写入的字典
-                data = {
-                    "Luminance": [[float(luminance_k), 0]]
-                }
-                save_json(data, luminance_json_file_path)
-
-                radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(
-                    radiance_config_path, rad_file_name)
-                os.makedirs(radiance_file_path, exist_ok=True)
-                # 完整的文件路径
-                radiance_json_file_path = os.path.join(
-                    radiance_file_path, "Radiance.json")
-                # 创建要写入的字典
-                data1 = {
-                    "Radiance": [[float(radiance_k), 0]]
-                }
-                save_json(data1, radiance_json_file_path)
-        time.sleep(1)
-        update_status("写入完成，保存数据表")
-        save_results_to_excel(results, out_path)
-    else:
-        if nd_list == []:
-            for gray in gray_range:
-                aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
-                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
-                ret = mono.ml_update_AE_params(aeparams)
-                if xyz_list == []:
-                    mono.ml_set_exposure(exposure=exposure)
-                    mono.ml_capture_image_syn()
-                    capture_data = mono.ml_get_CaptureData()
-                    # 这里给一个默认XYZ值
-                    capture_data_dict[mlcm.MLFilterEnum.X] = capture_data
-                    # set capture data for measurement
-                    ret = colorimeter.ml_set_CaptureData(
-                        module_id, capture_data_dict)
-                    if not ret.success:
-                        raise RuntimeError("ml_set_CaptureData error")
-                    cali_config = mlcm.pyCalibrationConfig(
-                        input_path=mono.ml_get_config_path(),
-                        aperture=mono.ml_get_aperture(),
-                        nd_filter_list=[mlcm.MLFilterEnum.ND0],
-                        xyz_filter_list=[mlcm.MLFilterEnum.X],
-                        rx=mlcm.pyRXCombination(0, 0, 0),
-                        light_source_list=[mono.ml_get_light_source()],
-                        dark_flag=True,
-                        ffc_flag=True,
-                        color_shift_flag=False,
-                        distortion_flag=False,
-                        exposure_flag=False,
-                        four_color_flag=False
-                    )
-
-                    # load calibration data by calbration config
-                    ret = colorimeter.ml_load_calibration_data(cali_config)
-                    if not ret.success:
-                        raise RuntimeError("ml_load_calibration_data error")
-
-                    # execute calibration process for capture data by calibration config
-                    ret = colorimeter.ml_image_process(cali_config)
-                    if not ret.success:
-                        raise RuntimeError("ml_image_process error")
-
-                    # get calibration data after calibration process
-                    processed_data = colorimeter.ml_get_processed_data(
-                        module_id)
-
-                    img = processed_data[mlcm.CalibrationEnum.FFC][mlcm.MLFilterEnum.X].image
-
-                    average_gray = process_image(
-                        img, image_x, image_y, roi_width, roi_height)
-                    average_gray += gray_offset
-                    exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                    update_status(
-                        f"{str(gray)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                    gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                    luminance_k = luminance_no_xyz / gray_ET if gray_ET > 0 else 0
-                    radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                    results.append({
-                        "Gray Range": f"{gray * 100}" + "%",
-                        "NDFilter": "None",
-                        "AVEGray": average_gray,
-                        "ExposureTime": exposure_time,
-                        "G/ET": gray_ET,
-                        "Luminance": luminance_no_xyz,
-                        "K(L)": luminance_k,
-                        "Radiance": radiance,
-                        "K(R)": radiance_k
-                    })
-                else:
-                    for xyz in xyz_list:
-                        # move color filter
-                        mono.ml_move_xyz_syn(xyz)
-                        # set exposure by pyExposureSetting
-                        mono.ml_set_exposure(exposure=exposure)
-                        mono.ml_capture_image_syn()
-                        capture_data = mono.ml_get_CaptureData()
-                        capture_data_dict[xyz] = capture_data
-                    # set capture data for measurement
-                    ret = colorimeter.ml_set_CaptureData(
-                        module_id, capture_data_dict)
-                    if not ret.success:
-                        raise RuntimeError("ml_set_CaptureData error")
-                    cali_config = mlcm.pyCalibrationConfig(
-                        input_path=mono.ml_get_config_path(),
-                        aperture=mono.ml_get_aperture(),
-                        nd_filter_list=[mlcm.MLFilterEnum.ND0],
-                        xyz_filter_list=xyz_list,
-                        rx=mlcm.pyRXCombination(0, 0, 0),
-                        light_source_list=[mono.ml_get_light_source()],
-                        dark_flag=True,
-                        ffc_flag=True,
-                        color_shift_flag=False,
-                        distortion_flag=False,
-                        exposure_flag=False,
-                        four_color_flag=False
-                    )
-                    # load calibration data by calbration config
-                    ret = colorimeter.ml_load_calibration_data(cali_config)
-                    if not ret.success:
-                        raise RuntimeError("ml_load_calibration_data error")
-
-                    # execute calibration process for capture data by calibration config
-                    ret = colorimeter.ml_image_process(cali_config)
-                    if not ret.success:
-                        raise RuntimeError("ml_image_process error")
-
-                    # get calibration data after calibration process
-                    processed_data = colorimeter.ml_get_processed_data(
-                        module_id)
-                    for xyz in xyz_list:
-                        Luminance = luminance_values[xyz]
-                        # capture single image from camera
-                        img = processed_data[mlcm.CalibrationEnum.FFC][xyz].image
-                        # mono calibration
-                        average_gray = process_image(
-                            img, image_x, image_y, roi_width, roi_height)
-                        average_gray += gray_offset
-                        # get exposure time
-                        exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                        update_status(
-                            f"{str(gray)}_{mlcm.MLFilterEnum_to_str(xyz)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                        gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                        luminance_k = Luminance / gray_ET if gray_ET > 0 else 0
-                        radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                        # add result to the list
-                        results.append({
-                            "Gray Range": f"{gray * 100}" + "%",
-                            "NDFilter": "None",
-                            "XYZFilter": mlcm.MLFilterEnum_to_str(xyz),
-                            "AVEGray": average_gray,
-                            "ExposureTime": exposure_time,
-                            "G/ET": gray_ET,
-                            "Luminance": Luminance,
-                            "K(L)": luminance_k,
-                            "Radiance": radiance,
-                            "K(R)": radiance_k
-                        })
-
+        target_items = [item for item in results if np.isclose(item["GrayRaw"], TARGET_GRAY_RATIO)]
+        if len(target_items) == 0:
+            update_status("WARN", "未找到80%灰度对应数据，跳过写入Luminance/Radiance JSON", status_callback)
         else:
-            for nd in nd_list:
-                mono.ml_move_nd_syn(nd)
-                for gray in gray_range:
-                    aeparams = mlcm.pyAEParams(dynamic_range=gray, target_max=gray +
-                                       0.05, target_min=gray - 0.05, max_time=max_time, rate=rate, pixel_count=pixel_count,use_roi=use_roi)
-                    ret = mono.ml_update_AE_params(aeparams)
-                    if xyz_list == []:
-                        mono.ml_set_exposure(exposure=exposure)
-                        mono.ml_capture_image_syn()
-                        capture_data = mono.ml_get_CaptureData()
-                        capture_data_dict[mlcm.MLFilterEnum.X] = capture_data
-                        # set capture data for measurement
-                        ret = colorimeter.ml_set_CaptureData(
-                            module_id, capture_data_dict)
-                        if not ret.success:
-                            raise RuntimeError("ml_set_CaptureData error")
-                        cali_config = mlcm.pyCalibrationConfig(
-                            input_path=mono.ml_get_config_path(),
-                            aperture=mono.ml_get_aperture(),
-                            nd_filter_list=[nd],
-                            xyz_filter_list=[mlcm.MLFilterEnum.X],
-                            rx=mlcm.pyRXCombination(0, 0, 0),
-                            light_source_list=[mono.ml_get_light_source()],
-                            dark_flag=True,
-                            ffc_flag=True,
-                            color_shift_flag=False,
-                            distortion_flag=False,
-                            exposure_flag=False,
-                            four_color_flag=False
-                        )
-                        # load calibration data by calbration config
-                        ret = colorimeter.ml_load_calibration_data(cali_config)
-                        if not ret.success:
-                            raise RuntimeError(
-                                "ml_load_calibration_data error")
-
-                        # execute calibration process for capture data by calibration config
-                        ret = colorimeter.ml_image_process(cali_config)
-                        if not ret.success:
-                            raise RuntimeError("ml_image_process error")
-
-                        # get calibration data after calibration process
-                        processed_data = colorimeter.ml_get_processed_data(
-                            module_id)
-                        img = processed_data[mlcm.CalibrationEnum.FFC][mlcm.MLFilterEnum.X].image
-                        average_gray = process_image(
-                            img, image_x, image_y, roi_width, roi_height)
-                        average_gray += gray_offset
-                        exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                        update_status(
-                            f"{mlcm.MLFilterEnum_to_str(nd)}_{str(gray)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                        gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                        luminance_k = luminance_no_xyz / gray_ET if gray_ET > 0 else 0
-                        radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                        results.append({
-                            "Gray Range": f"{gray * 100}" + "%",
-                            "NDFilter": mlcm.MLFilterEnum_to_str(nd),
-                            "AVEGray": average_gray,
-                            "ExposureTime": exposure_time,
-                            "G/ET": gray_ET,
-                            "Luminance": luminance_no_xyz,
-                            "K(L)": luminance_k,
-                            "Radiance": radiance,
-                            "K(R)": radiance_k
-                        })
-                    else:
-                        for xyz in xyz_list:
-                            # move color filter
-                            mono.ml_move_xyz_syn(xyz)
-                            # set exposure by pyExposureSetting
-                            mono.ml_set_exposure(exposure=exposure)
-                            # capture single image from camera
-                            mono.ml_capture_image_syn()
-
-                            capture_data = mono.ml_get_CaptureData()
-                            capture_data_dict[xyz] = capture_data
-                        # set capture data for measurement
-                        ret = colorimeter.ml_set_CaptureData(
-                            module_id, capture_data_dict)
-                        if not ret.success:
-                            raise RuntimeError("ml_set_CaptureData error")
-                        cali_config = mlcm.pyCalibrationConfig(
-                            input_path=mono.ml_get_config_path(),
-                            aperture=mono.ml_get_aperture(),
-                            nd_filter_list=[nd],
-                            color_filter_list=xyz_list,
-                            rx=mlcm.pyRXCombination(0, 0, 0),
-                            light_source_list=[mono.ml_get_light_source()],
-                            dark_flag=True,
-                            ffc_flag=True,
-                            color_shift_flag=False,
-                            distortion_flag=False,
-                            exposure_flag=False,
-                            four_color_flag=False
-                        )
-                        # load calibration data by calbration config
-                        ret = colorimeter.ml_load_calibration_data(cali_config)
-                        if not ret.success:
-                            raise RuntimeError(
-                                "ml_load_calibration_data error")
-
-                        # execute calibration process for capture data by calibration config
-                        ret = colorimeter.ml_image_process(cali_config)
-                        if not ret.success:
-                            raise RuntimeError("ml_image_process error")
-
-                        # get calibration data after calibration process
-                        processed_data = colorimeter.ml_get_processed_data(
-                            module_id)
-                        for xyz in xyz_list:
-                            Luminance = luminance_values[xyz]
-                            img = processed_data[mlcm.CalibrationEnum.FFC][xyz].image
-                            # mono calibration
-                            average_gray = process_image(
-                                img, image_x, image_y, roi_width, roi_height)
-                            average_gray += gray_offset
-                            # get exposure time
-                            exposure_time = mono.ml_get_exposure_time() + expusure_offset
-                            update_status(
-                                f"{mlcm.MLFilterEnum_to_str(nd)}_{str(gray)}_{mlcm.MLFilterEnum_to_str(xyz)}_averageGray:{str(average_gray)}_exposureTime:{str(exposure_time)}")
-                            gray_ET = average_gray / exposure_time if exposure_time > 0 else 0
-                            luminance_k = Luminance / gray_ET if gray_ET > 0 else 0
-                            radiance_k = radiance / gray_ET if gray_ET > 0 else 0
-                            # add result to the list
-                            results.append({
-                                "Gray Range": f"{gray * 100}" + "%",
-                                "NDFilter": mlcm.MLFilterEnum_to_str(nd),
-                                "XYZFilter": mlcm.MLFilterEnum_to_str(xyz),
-                                "AVEGray": average_gray,
-                                "ExposureTime": exposure_time,
-                                "G/ET": gray_ET,
-                                "Luminance": Luminance,
-                                "K(L)": luminance_k,
-                                "Radiance": radiance,
-                                "K(R)": radiance_k
-                            })
-
-        time.sleep(1)
-        update_status("写入配置中...")
-
-        # 将results中灰度值在80%的luminance_k和radiance_k写入配置文件，b为0
-        for item in results:
-            if item["Gray Range"] == "80.0%":
-                if nd_list == []:
-                    if xyz_list == []:
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, "", "")
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, "", "")
-                    else:
-                        xyz_filter = item["XYZFilter"]
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, "", xyz_filter)
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, "", xyz_filter)
-                else:
-                    # 文件夹命名格式为Aperture_NDFilter_LightSource
-                    nd_filter = item["NDFilter"]
-                    if xyz_list == []:
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, nd_filter, "")
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, nd_filter, "")
-                    else:
-                        xyz_filter = item["XYZFilter"]
-                        lum_file_name = generate_folder_name(
-                            lum_folder_rule, apturate, light_source, nd_filter, xyz_filter)
-                        rad_file_name = generate_folder_name(
-                            rad_folder_rule, apturate, light_source, nd_filter, xyz_filter)
+            update_status("INFO", f"找到 {len(target_items)} 条80%灰度匹配记录，开始生成配置文件夹", status_callback)
+            luminance_config_path = os.path.join(eye1_path, "Luminance")
+            create_directory(luminance_config_path)
+            radiance_config_path = os.path.join(eye1_path, "Radiance")
+            create_directory(radiance_config_path)
+            for item in target_items:
+                nd_filter = item["NDFilter"]
+                xyz_filter = item["XYZFilter"]
+                lum_file_name = generate_folder_name(lum_folder_rule, aperture, light_source, nd_filter, xyz_filter)
+                rad_file_name = generate_folder_name(rad_folder_rule, aperture, light_source, nd_filter, xyz_filter)
                 luminance_k = item["K(L)"]
                 radiance_k = item["K(R)"]
-                luminance_config_path = os.path.join(eye1_path, "Luminance")
-                create_directory(luminance_config_path)
-                radiance_config_path = os.path.join(eye1_path, "Radiance")
-                create_directory(radiance_config_path)
-
-                luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(
-                    luminance_config_path, lum_file_name)
+                luminance_file_path = luminance_config_path if lum_file_name == "" else os.path.join(luminance_config_path, lum_file_name)
                 os.makedirs(luminance_file_path, exist_ok=True)
-                # 完整的文件路径
-                luminance_json_file_path = os.path.join(
-                    luminance_file_path, "Luminance.json")
-                # 创建要写入的字典
-                data = {
-                    "Luminance": [[float(luminance_k), 0]]
-                }
+                luminance_json_file_path = os.path.join(luminance_file_path, "Luminance.json")
+                data = {"Luminance": [[float(luminance_k), 0]]}
                 save_json(data, luminance_json_file_path)
 
-                radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(
-                    radiance_config_path, rad_file_name)
+                radiance_file_path = radiance_config_path if rad_file_name == "" else os.path.join(radiance_config_path, rad_file_name)
                 os.makedirs(radiance_file_path, exist_ok=True)
-                # 完整的文件路径
-                radiance_json_file_path = os.path.join(
-                    radiance_file_path, "Radiance.json")
-                # 创建要写入的字典
-                data1 = {
-                    "Radiance": [[float(radiance_k), 0]]
-                }
+                radiance_json_file_path = os.path.join(radiance_file_path, "Radiance.json")
+                data1 = {"Radiance": [[float(radiance_k), 0]]}
                 save_json(data1, radiance_json_file_path)
-        time.sleep(1)
-        update_status("写入完成，保存数据表")
+                update_status("INFO", f"处理记录: ND={nd_filter}, XYZ={xyz_filter}, RX={item.get('RX','')}, K(L)={luminance_k:.4f}", status_callback)
+        time.sleep(SLEEP_INTERVAL)
+        update_status("INFO", f"写入完成，保存数据表到: {out_path}", status_callback)
         save_results_to_excel(results, out_path)
+        
+    except Exception as e:
+        # 只要发生任何异常，都会先推送ERROR消息给UI
+        err_msg = f"{type(e).__name__}: {str(e)}"
+        update_status("ERROR", err_msg, status_callback)
+        raise
+
+
+if __name__ == "__main__":
+    eye1_path = r"D:\MLOptic\MLColorimeter\weilaixing\EYE1"
+    aperture = "2.65mm"
+    # 选择光源
+    light_source = "W"
+    # 定义亮度值映射
+    luminance_values = {
+        mlcm.MLFilterEnum.X: 100,
+        mlcm.MLFilterEnum.Y: 150,
+        mlcm.MLFilterEnum.Z: 200,
+        mlcm.MLFilterEnum.Clear: 1000
+    }
+    luminance_no_xyz = 1000
+    # 设置Radiance
+    Radiance = 100
+    # 输出路径
+    out_path = r"E:\testout\calibrations" + "\\" + light_source
+
+    # switch light source
+    show_message(light_source)
+    with mlcm.ML_Colorimeter() as ml_colorimeter:
+        path_list = [
+            eye1_path,
+        ]
+        # nd filter keyword, from the "Key" field in NDFilterConfig.json
+        nd_key = "NDFilter"
+        # xyz filter keyword, from the "Key" field in NDFilterConfig.json
+        xyz_key = "ColorFilter"
+
+        do_nd = True   # False: module not have NDFilter
+        do_xyz = True  # False: module not have XYZFilter
+        # nd filter to switch during measurement
+        nd_list = [mlcm.MLFilterEnum.ND0, mlcm.MLFilterEnum.ND1, mlcm.MLFilterEnum.ND2, mlcm.MLFilterEnum.ND3, mlcm.MLFilterEnum.ND4]
+        # xyz filter to switch during measurement
+        xyz_list = [mlcm.MLFilterEnum.X, mlcm.MLFilterEnum.Y, mlcm.MLFilterEnum.Z, mlcm.MLFilterEnum.Clear]
+        
+        # gray range for calibration
+        gray_range = [0.5, 0.6, 0.7, 0.8, 0.9]
+
+        # roi point and size for image processing, to calculate average gray value
+        image_point = [5632, 4600]
+        roi_size = [300, 300]
+        lum_folder_rule, rad_folder_rule = get_lum_rad_folder_rule(eye1_path)
+
+        # 1、连接对应模块
+       # add mono module into ml_colorimeter system, according to path_list create one or more mono module
+        ret = ml_colorimeter.ml_add_module(path_list=path_list)
+        if not ret.success:
+            raise RuntimeError("ml_add_module error")
+        # connect all module in the ml_colorimeter system
+        ret = ml_colorimeter.ml_connect()
+        if not ret.success:
+            raise RuntimeError("ml_connect error")
+
+        mono_calibration(
+            colorimeter=ml_colorimeter,
+            nd_list=nd_list,
+            xyz_list=xyz_list,
+            gray_range=gray_range,
+            aperture=aperture,
+            light_source=light_source,
+            luminance_values=luminance_values,
+            luminance_no_xyz=luminance_no_xyz,
+            radiance=Radiance,
+            eye1_path=eye1_path,
+            out_path=out_path,
+            image_point=image_point,
+            roi_size=roi_size,
+            lum_folder_rule=lum_folder_rule,
+            rad_folder_rule=rad_folder_rule,
+            do_nd=do_nd,
+            do_xyz=do_xyz
+        )

@@ -17,44 +17,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon,QColor,QTextCharFormat
 from core.app_config import AppConfig
+from core.config_helper import UiConfigHelper,MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.fourcolor_calibration import fourcolor_calibration_capture, fourcolor_calibration_calculate
 from ui.exposureconfig_window import ExposureConfigWindow
 from datetime import datetime
-from typing import Literal
-import os,json,sys
-MsgLevel = Literal["INFO", "WARN", "ERROR"]
-
-def get_exe_dir():
-    if hasattr(sys, '_MEIPASS'):
-        exe_path = sys.executable
-    else:
-        exe_path = __file__
-    return os.path.dirname(os.path.abspath(exe_path))
-
-CFG_NAME="fourcolor_calibration_params.json"
-CFG_PATH=os.path.join(get_exe_dir(),CFG_NAME)
-
-def save_last_ui_params(param_dict:dict):
-    try:
-        with open(CFG_PATH,"w",encoding="utf-8") as f:
-            json.dump(param_dict,f,indent=2,ensure_ascii=False)
-    except Exception as e:
-        print(f"保存上次参数失败: {e}")
-
-def load_last_ui_params(default_dict:dict):
-    if not os.path.exists(CFG_PATH):
-        return default_dict.copy()
-    try:
-        with open(CFG_PATH,"r",encoding="utf-8") as f:
-            loaded=json.load(f)
-        out=default_dict.copy()
-        out.update(loaded)
-        return out
-    except Exception as e:
-        print(f"加载上次参数异常，使用默认: {e}")
-        return default_dict.copy()
+import os
 
 class FourColorCalibrationCaptureThread(QThread):
     finished = pyqtSignal()  # 线程完成信号
@@ -120,6 +89,7 @@ class FourColorCalabrationWindow(QDialog):
                              'MLMono16', 'MLRGB24', 'MLBayer', 'MLBayerGB8', 'MLBayerGB12']
         self.exposure_map_obj = {}
         self.log_file_path=""
+        self.cfg_helper=UiConfigHelper("fourcolor_calibration_params.json")
         self._init_ui()
         self.is_running = False
 
@@ -143,7 +113,7 @@ class FourColorCalabrationWindow(QDialog):
             "nmatrix_path":"",
             "exposure_map_serial":{}
         }
-        self.cur_ui_params=load_last_ui_params(self.default_ui_params)
+        self.cur_ui_params=self.cfg_helper.load_params(self.default_ui_params)
         self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
@@ -568,7 +538,7 @@ class FourColorCalabrationWindow(QDialog):
         else:
             #==============关闭窗口保存当前UI参数====================
             p=self.read_ui_params()
-            save_last_ui_params(p)
+            self.cfg_helper.save_params(p)
             event.accept()
 
     def _open_folder_dialog(self):

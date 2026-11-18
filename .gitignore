@@ -170,3 +170,5 @@ core/__pycache__/app_config.cpython-38.pyc
 manual.md
 .gitignore
 manual.pdf
+ui/*.json
+core/*.json

@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIntValidator,QDoubleValidator,QColor,QTextCharFormat
 from core.app_config import AppConfig
+from core.config_helper import UiConfigHelper,MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt,QThread
 import mlcolorimeter as mlcm
 import numpy as np
@@ -25,40 +26,8 @@ import matplotlib.pyplot as plt
 from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image
 from scripts.field_curve import field_curve
-import json,os,sys
+import json,os
 from datetime import datetime
-from typing import Literal
-MsgLevel = Literal["INFO", "WARN", "ERROR"]
-
-def get_exe_dir():
-    if hasattr(sys, '_MEIPASS'):
-        exe_path = sys.executable
-    else:
-        exe_path = __file__
-    return os.path.dirname(os.path.abspath(exe_path))
-
-CFG_NAME = "field_curve_params.json"
-CFG_PATH = os.path.join(get_exe_dir(), CFG_NAME)
-
-def save_last_ui_params(param_dict: dict):
-    try:
-        with open(CFG_PATH, "w", encoding="utf-8") as f:
-            json.dump(param_dict, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"保存FieldCurve参数失败: {e}")
-
-def load_last_ui_params(default_dict: dict):
-    if not os.path.exists(CFG_PATH):
-        return default_dict.copy()
-    try:
-        with open(CFG_PATH, "r", encoding="utf-8") as f:
-            loaded = json.load(f)
-        out = default_dict.copy()
-        out.update(loaded)
-        return out
-    except Exception as e:
-        print(f"加载FieldCurve参数异常，使用默认: {e}")
-        return default_dict.copy()
 
 class FiledCurveThread(QThread):
     finished=pyqtSignal() # 线程完成信号
@@ -99,6 +68,7 @@ class FiledCurveWindow(QDialog):
         self.binning_mode=['AVERAGE','SUM']
         self.pixel_format=['MLMono8','MLMono10','MLMono12','MLMono16','MLRGB24','MLBayer','MLBayerGB8','MLBayerGB12']     
         self.log_file_path=""
+        self.cfg_helper=UiConfigHelper("field_curve_params.json")
         self._init_ui()
 
         self.is_running=False
@@ -133,7 +103,7 @@ class FiledCurveWindow(QDialog):
             "out_path": "",
             "roi_serial": []
         }
-        self.cur_ui_params = load_last_ui_params(self.default_ui_params)
+        self.cur_ui_params=self.cfg_helper.load_params(self.default_ui_params)
         self.fill_ui_by_params(self.cur_ui_params)
     
     def _init_ui(self):
@@ -824,8 +794,8 @@ class FiledCurveWindow(QDialog):
             QMessageBox.warning(self,"警告","程序运行中，请勿关闭窗口",QMessageBox.Ok)
         else:
             #==============关闭窗口保存当前UI参数====================
-            p=self.collect_ui_params()
-            save_last_ui_params(p)
+            p=self.read_ui_params()
+            self.cfg_helper.save_params(p)
             event.accept()
 
     def get_current_pixel_format(self):

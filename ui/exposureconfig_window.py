@@ -24,7 +24,7 @@ class ExposureConfigWindow(QDialog):
     # 定义信号，传递字典类型的数据
     config_saved = pyqtSignal(dict)
 
-    def __init__(self, nd_list: List[str], xyz_list: List[str], parent=None):
+    def __init__(self, nd_list: List[str], xyz_list: List[str],exposure_map=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Exposure Configuration")
         self.setGeometry(250, 250, 400, 300)
@@ -38,7 +38,7 @@ class ExposureConfigWindow(QDialog):
         self.xyz_list = xyz_list
         self.exposure_modes = ['Auto', 'Fixed']
         self.settings = {}  # (nd,xyz):(mode_combobox,time_entry)
-        self.exposure_map = {}
+        self.exposure_map = exposure_map if exposure_map is not None else {}
         self.is_config_saved = False
         self._init_ui()
 
@@ -81,6 +81,31 @@ class ExposureConfigWindow(QDialog):
         main_layout = QVBoxLayout()
         main_layout.addWidget(scroll_area)
         self.setLayout(main_layout)
+        self.fill_from_exposure_map()
+
+    def fill_from_exposure_map(self):
+        """初始化时，用传入的exposure_map自动回填UI（和load_config逻辑一致）"""
+        if not self.exposure_map:
+            return
+        try:
+            for nd in self.nd_list:
+                nd_enum = mlcm.MLFilterEnum(int(nd))
+                nd_str = mlcm.MLFilterEnum_to_str(nd_enum)
+                for xyz in self.xyz_list:
+                    xyz_enum = mlcm.MLFilterEnum(int(xyz))
+                    xyz_str = mlcm.MLFilterEnum_to_str(xyz_enum)
+                    if nd_enum in self.exposure_map and xyz_enum in self.exposure_map[nd_enum]:
+                        setting = self.exposure_map[nd_enum][xyz_enum]
+                        mode_combobox, time_entry = self.settings[(nd_str, xyz_str)]
+                        mode_combobox.setCurrentText(setting.exposure_mode.name)
+                        time_entry.setText(str(setting.exposure_time))
+                    else:
+                        # 不存在的配置，恢复默认
+                        mode_combobox, time_entry = self.settings[(nd_str, xyz_str)]
+                        mode_combobox.setCurrentIndex(0)
+                        time_entry.setText("100")
+        except Exception as e:
+            QMessageBox.warning(self, "MLColorimeter", f"初始化回填参数失败：{e}")
 
     def load_config(self):
         options = QFileDialog.Options()
@@ -114,6 +139,7 @@ class ExposureConfigWindow(QDialog):
                     e), QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def save_config(self):
+        self.exposure_map={}
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getSaveFileName(
             self, "Save Exposure Config", "", "JSON Files (*.json);;All Files (*)", options=options)
@@ -122,7 +148,7 @@ class ExposureConfigWindow(QDialog):
                 for nd in self.nd_list:
                     nd_enum = mlcm.MLFilterEnum(int(nd))
                     nd_str = mlcm.MLFilterEnum_to_str(nd_enum)
-                    self.exposure_map[nd_str] = {}
+                    self.exposure_map.setdefault(nd_str,{})
                     for xyz in self.xyz_list:
                         xyz_enum = mlcm.MLFilterEnum(int(xyz))
                         xyz_str = mlcm.MLFilterEnum_to_str(xyz_enum)

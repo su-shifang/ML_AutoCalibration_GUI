@@ -16,13 +16,12 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon,QTextCharFormat,QColor
 from core.app_config import AppConfig
+from core.config_helper import UiConfigHelper,MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.capture_dark_heatmap import capture_dark_heatmap
+import os
 from datetime import datetime
-from typing import Literal
-MsgLevel = Literal["INFO", "WARN", "ERROR"]
-
 
 class DarkHeatMapThread(QThread):
     finished = pyqtSignal()  # 线程完成信号
@@ -69,8 +68,27 @@ class DarkHeatMapWindow(QDialog):
         self.binning_mode = ['AVERAGE', 'SUM']
         self.pixel_format = ['MLMono8', 'MLMono10', 'MLMono12',
                              'MLMono16', 'MLRGB24', 'MLBayer', 'MLBayerGB8', 'MLBayerGB12']
+        self.log_file_path=""
+        self.cfg_helper=UiConfigHelper("dark_heatmap_params.json")
         self._init_ui()
         self.is_running = False
+
+        #=====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params={
+            "binn_selector":"Logic",
+            "binn_mode":"AVERAGE",
+            "binn":"0",
+            "pixel_format":"MLMono12",
+            "avg_count":"1",
+            "et_list":"1 10",
+            "binn_list":"0",
+            "nd_list":"4 5",
+            "xyz_list":"1 2",
+            "save_path":"",
+            "file_name":"dark_heatmap"
+        }
+        self.cur_ui_params=self.cfg_helper.load_params(self.default_ui_params)
+        self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
         grid_layout = QGridLayout()
@@ -211,6 +229,45 @@ class DarkHeatMapWindow(QDialog):
 
         self.setLayout(grid_layout)
 
+    
+    def fill_ui_by_params(self, params: dict):
+        binn_sel_idx = self.line_edit_binn_selector.findText(params["binn_selector"])
+        if binn_sel_idx >= 0:
+            self.line_edit_binn_selector.setCurrentIndex(binn_sel_idx)
+        binn_mode_idx = self.line_edit_binn_mode.findText(params["binn_mode"])
+        if binn_mode_idx >= 0:
+            self.line_edit_binn_mode.setCurrentIndex(binn_mode_idx)
+
+        self.line_edit_binn.setText(params["binn"])
+        pf_idx = self.line_edit_pixel_format.findText(params["pixel_format"])
+        if pf_idx >= 0:
+            self.line_edit_pixel_format.setCurrentIndex(pf_idx)
+
+        self.line_edit_times.setText(params["avg_count"])
+        self.line_edit_etlist.setText(params["et_list"])
+        self.line_edit_binnlist.setText(params["binn_list"])
+
+        self.line_edit_ndlist.setText(params["nd_list"])
+        self.line_edit_xyzlist.setText(params["xyz_list"])
+        self.line_edit_path.setText(params["save_path"])
+        self.line_edit_filename.setText(params["file_name"])
+    
+    def read_ui_params(self) -> dict:
+        param_dict = {
+            "binn_selector": self.line_edit_binn_selector.currentText(),
+            "binn_mode": self.line_edit_binn_mode.currentText(),
+            "binn": self.line_edit_binn.text().strip(),
+            "pixel_format": self.line_edit_pixel_format.currentText(),
+            "avg_count": self.line_edit_times.text().strip(),
+            "et_list": self.line_edit_etlist.text().strip(),
+            "binn_list": self.line_edit_binnlist.text().strip(),
+            "nd_list": self.line_edit_ndlist.text().strip(),
+            "xyz_list": self.line_edit_xyzlist.text().strip(),
+            "save_path": self.line_edit_path.text().strip(),
+            "file_name": self.line_edit_filename.text().strip()
+        }
+        return param_dict
+
     def flush_log(self,msg):
         cursor = self.log_box.textCursor()
         cursor.movePosition(cursor.End)
@@ -232,6 +289,15 @@ class DarkHeatMapWindow(QDialog):
         # 自动滚动到底部
         sb=self.log_box.verticalScrollBar()
         sb.setValue(sb.maximum())
+
+        # 写入本地txt日志
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, "a", encoding="utf-8") as f:
+                    f.write(full_text)
+            except Exception as log_err:
+                # 日志写入失败不打断主流程
+                print(f"write log file failed: {log_err}")
         
     def _open_folder_dialog(self):
         # 打开文件夹选择对话框
@@ -274,6 +340,11 @@ class DarkHeatMapWindow(QDialog):
             self.xyzlist = [mlcm.MLFilterEnum(int(xyz))
                             for xyz in self.line_edit_xyzlist.text().split()]
             self.file_name = self.line_edit_filename.text() + ".xlsx"
+
+            # ========== 生成本次运行的时间戳，用于日志文件 ==========
+            run_ts = datetime.now().strftime('%Y-%m-%d')
+            self.log_file_path = os.path.join(self.save_path, f"{run_ts}_dark_heatmap_log.txt")
+
             self.btn_capture.setEnabled(False)
             self.is_running = True
             parameters = {
@@ -319,6 +390,9 @@ class DarkHeatMapWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "定标进行中，请勿关闭窗口", QMessageBox.Ok)
         else:
+            #==============关闭窗口保存当前UI参数====================
+            p=self.read_ui_params()
+            self.cfg_helper.save_params(p)
             event.accept()
 
     def get_current_pixel_format(self):

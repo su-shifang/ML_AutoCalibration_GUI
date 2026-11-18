@@ -18,18 +18,19 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QFormLayout,
     QScrollArea,
-    QFrame
+    QFrame,
+    QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon,QColor,QTextCharFormat
 from core.app_config import AppConfig
+from core.config_helper import UiConfigHelper,MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 import cv2
 from scripts.mono_calibration import mono_calibration, mono_calibration_do_ffc
 import configparser
+from datetime import datetime
 import os
-
-
 class CalibrationThread(QThread):
     finished = pyqtSignal()  # 线程完成信号
     error = pyqtSignal(str)  # 错误信号
@@ -41,8 +42,11 @@ class CalibrationThread(QThread):
 
     def run(self):
         try:
+            # 包装回调：接受level，msg，拼接成字符串再发给信号
+            def callback_wrapper(level: MsgLevel,msg:str):
+                self.status_update.emit(msg)
             mono_calibration(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -59,8 +63,11 @@ class CalibrationDoFFCThread(QThread):
 
     def run(self):
         try:
+            # 包装回调：接受level，msg，拼接成字符串再发给信号
+            def callback_wrapper(level: MsgLevel,msg:str):
+                self.status_update.emit(msg)
             mono_calibration_do_ffc(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters) # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -90,10 +97,48 @@ class MonoCalibrationWindow(QDialog):
         self.temp = False  # ini读取是否成功的标志
         self.lum_folder_rule = ""
         self.rad_folder_rule = ""
+        self.log_file_path=""
+        self.cfg_helper=UiConfigHelper("mono_calibration_params.json")
         self._init_ui()
 
         # 标识当前是否正在定标
         self.is_calibrating = False
+
+        #=====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params={
+            "binn_selector":"Logic",
+            "binn_mode":"AVERAGE",
+            "binn":"0",
+            "pixel_format":"MLMono12",
+            "aperture":"3mm",
+            "no_nd":False,
+            "nd_text":"4",
+            "no_xyz":False,
+            "xyz_text":"1",
+            "luminance":"10000 2300",
+            "radiance":"1000",
+            "et_offset":"0",
+            "gray_offset":"0",
+            "gray_text":"0.5 0.8",
+            "do_ffc": False,
+            "do_rx":False,
+            "sph_text":"-6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6",
+            "cyl_text":"-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
+            "axis_text":"0 15 30 45 60 75 90 105 120 135 150 165",
+            "center_xy":"6688 4764",
+            "roi_wh":"200 200",
+            "light_source":"W",
+            "save_path":"",
+            "do_ae":False,
+            "auto_et":"10",
+            "max_time":"5000",
+            "rate":"1000000",
+            "use_roi":False,
+            "pixel_count":"200"
+
+        }
+        self.cur_ui_params=self.cfg_helper.load_params(self.default_ui_params)
+        self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
         # 创建一个 QScrollArea
@@ -397,9 +442,9 @@ class MonoCalibrationWindow(QDialog):
         self.btn_capture.clicked.connect(self.start_mono_calibration)
         grid_layout.addWidget(self.btn_capture, 32, 0)
 
-        self.status_label = QLabel("状态：等待开始")
-        self.status_label.setWordWrap(True)  # 设置自动换行
-        grid_layout.addWidget(self.status_label, 33, 0)
+        self.log_box=QPlainTextEdit()
+        self.log_box.setReadOnly(True)
+        grid_layout.addWidget(self.log_box,33,0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -426,6 +471,92 @@ class MonoCalibrationWindow(QDialog):
         self.line_edit_rate.setEnabled(False)
         self.checkbox_use_roi.setEnabled(False)
         self.line_edit_pixel_count.setEnabled(False)
+        self.label_exposure_offset.setVisible(False)
+        self.line_edit_exposure_offset.setVisible(False)
+        self.label_gray_offset.setVisible(False)
+        self.line_edit_gray_offset.setVisible(False)
+
+    
+    def fill_ui_by_params(self, params: dict):
+        binn_sel_idx = self.line_edit_binn_selector.findText(params["binn_selector"])
+        if binn_sel_idx >= 0:
+            self.line_edit_binn_selector.setCurrentIndex(binn_sel_idx)
+        binn_mode_idx = self.line_edit_binn_mode.findText(params["binn_mode"])
+        if binn_mode_idx >= 0:
+            self.line_edit_binn_mode.setCurrentIndex(binn_mode_idx)
+
+        self.line_edit_binn.setText(params["binn"])
+        pf_idx = self.line_edit_pixel_format.findText(params["pixel_format"])
+        if pf_idx >= 0:
+            self.line_edit_pixel_format.setCurrentIndex(pf_idx)
+
+        self.line_edit_aperture.setText(params["aperture"])
+        self.checkbox_exist_nd.setChecked(params["no_nd"])
+        self.line_edit_ndlist.setText(params["nd_text"])
+        self.checkbox_exist_xyz.setChecked(params["no_xyz"])
+        self.line_edit_xyzlist.setText(params["xyz_text"])
+        self.line_edit_xyzlist_lum.setText(params["luminance"])
+        self.line_edit_radiance_lum.setText(params["radiance"])
+        self.line_edit_exposure_offset.setText(params["et_offset"])
+        self.line_edit_gray_offset.setText(params["gray_offset"])
+        self.line_edit_gray_range.setText(params["gray_text"])
+        self.checkbox_do_ffc.setChecked(params["do_ffc"])
+        self.checkbox_is_rx.setChecked(params["do_rx"])
+        self.line_edit_sphlist.setText(params["sph_text"])
+        self.line_edit_cyllist.setText(params["cyl_text"])
+        self.line_edit_axislist.setText(params["axis_text"])
+        self.line_edit_image_size.setText(params["center_xy"])
+        self.line_edit_roi_size.setText(params["roi_wh"])
+        light_id_map={
+            "R":1,
+            "G":2,
+            "B":3,
+            "W":4
+        }
+        light_val=params["light_source"]
+        btn_id=light_id_map[light_val]
+        self.rgbw_btngroup.button(btn_id).setChecked(True)
+        self.line_edit_path.setText(params["save_path"])
+        self.checkbox_enable_ae.setChecked(params["do_ae"])
+        self.line_edit_exposure_time.setText(params["auto_et"])
+        self.line_edit_max_time.setText(params["max_time"])
+        self.line_edit_rate.setText(params["rate"])
+        self.checkbox_use_roi.setChecked(params["use_roi"])
+        self.line_edit_pixel_count.setText(params["pixel_count"])
+    
+    def read_ui_params(self) -> dict:
+        param_dict = {
+            "binn_selector": self.line_edit_binn_selector.currentText(),
+            "binn_mode": self.line_edit_binn_mode.currentText(),
+            "binn": self.line_edit_binn.text().strip(),
+            "pixel_format": self.line_edit_pixel_format.currentText(),
+            "aperture":self.line_edit_aperture.text().strip(),
+            "no_nd":self.checkbox_exist_nd.isChecked(),
+            "nd_text":self.line_edit_ndlist.text().strip(),
+            "no_xyz":self.checkbox_exist_xyz.isChecked(),
+            "xyz_text":self.line_edit_xyzlist.text().strip(),
+            "luminance":self.line_edit_xyzlist_lum.text().strip(),
+            "radiance":self.line_edit_radiance_lum.text().strip(),
+            "et_offset":self.line_edit_exposure_offset.text().strip(),
+            "gray_offset":self.line_edit_gray_offset.text().strip(),
+            "gray_text":self.line_edit_gray_range.text().strip(),
+            "do_ffc": self.checkbox_do_ffc.isChecked(),
+            "do_rx":self.checkbox_is_rx.isChecked(),
+            "sph_text":self.line_edit_sphlist.text().strip(),
+            "cyl_text":self.line_edit_cyllist.text().strip(),
+            "axis_text":self.line_edit_axislist.text().strip(),
+            "center_xy":self.line_edit_image_size.text().strip(),
+            "roi_wh":self.line_edit_roi_size.text().strip(),
+            "light_source":self.rgbw_btngroup.checkedButton().text(),
+            "save_path":self.line_edit_path.text().strip(),
+            "do_ae":self.checkbox_enable_ae.isChecked(),
+            "auto_et":self.line_edit_exposure_time.text().strip(),
+            "max_time":self.line_edit_max_time.text().strip(),
+            "rate":self.line_edit_rate.text().strip(),
+            "use_roi":self.checkbox_use_roi.isChecked(),
+            "pixel_count":self.line_edit_pixel_count.text().strip()
+        }
+        return param_dict
 
     def validate_input(self):
         text = self.line_edit_binn.text()
@@ -553,6 +684,10 @@ class MonoCalibrationWindow(QDialog):
             self.expusure_offset = float(self.line_edit_exposure_offset.text())
             self.gray_offset = float(self.line_edit_gray_offset.text())
 
+            # ========== 生成本次运行的时间戳，用于日志文件 ==========
+            run_ts = datetime.now().strftime('%Y-%m-%d')
+            self.log_file_path = os.path.join(self.out_path, f"{run_ts}_mono_calibration_log.txt")
+
             if self.checkbox_enable_ae.isChecked():
                 self.exposure_time=float(self.line_edit_exposure_time.text())
                 self.max_time=float(self.line_edit_max_time.text())
@@ -560,21 +695,15 @@ class MonoCalibrationWindow(QDialog):
                 self.pixel_count=int(self.line_edit_pixel_count.text())
                 self.use_roi=self.checkbox_use_roi.isChecked()
 
-            self.status_label.setText(
-                "<span style='color: green;'>状态: 正在进行单色定标...</span>")  # 更新状态
             self.btn_capture.setEnabled(False)
             self.is_calibrating = True
             # 将参数打包到字典中
             parameters = {
                 'colorimeter': self.colorimeter,
-                'binn_selector': self.binn_selector,
-                'binn_mode': self.binn_mode,
-                'binn': self.binn,
-                'pixel_format': self.pixel_format,
                 'nd_list': self.nd_list,
                 'xyz_list': self.xyz_list,
                 'gray_range': self.gray_list,
-                'apturate': self.aperture,
+                'aperture': self.aperture,
                 'light_source': self.light_source,
                 'luminance_values': self.lum_dict,
                 'luminance_no_xyz': self.luminance_no_xyz,
@@ -583,10 +712,16 @@ class MonoCalibrationWindow(QDialog):
                 'out_path': self.out_path,
                 'image_point': self.image_point,
                 'roi_size': self.roi_size,
+                'lum_folder_rule': self.lum_folder_rule,
+                'rad_folder_rule': self.rad_folder_rule,
+                'binn_selector': self.binn_selector,
+                'binn_mode': self.binn_mode,
+                'binn': self.binn,
+                'pixel_format': self.pixel_format,
+                'do_nd':self.checkbox_exist_nd.isChecked(),
+                'do_xyz':self.checkbox_exist_xyz.isChecked(),
                 'expusure_offset': self.expusure_offset,
                 'gray_offset': self.gray_offset,
-                'lum_folder_rule': self.lum_folder_rule,
-                'rad_folder_rule': self.rad_folder_rule
             }
             if self.checkbox_enable_ae.isChecked():
                 parameters['exposure_time']=self.exposure_time
@@ -607,7 +742,6 @@ class MonoCalibrationWindow(QDialog):
                     self.sph_list = [0.0]
                     self.cyl_list = [0.0]
                     self.axis_list = [0]
-                parameters['is_rx'] = self.is_rx
                 parameters['sph_list'] = self.sph_list
                 parameters['cyl_list'] = self.cyl_list
                 parameters['axis_list'] = self.axis_list
@@ -618,7 +752,7 @@ class MonoCalibrationWindow(QDialog):
                 self.calibration_doffc_thread.error.connect(
                     self.on_calibration_error)
                 self.calibration_doffc_thread.status_update.connect(
-                    self.update_status)
+                    self.flush_log)
                 self.calibration_doffc_thread.start()  # 启动线程
             else:
                 self.calibration_thread = CalibrationThread(parameters)
@@ -627,7 +761,7 @@ class MonoCalibrationWindow(QDialog):
                 self.calibration_thread.error.connect(
                     self.on_calibration_error)
                 self.calibration_thread.status_update.connect(
-                    self.update_status)
+                    self.flush_log)
                 self.calibration_thread.start()  # 启动线程
 
         except Exception as e:
@@ -635,6 +769,38 @@ class MonoCalibrationWindow(QDialog):
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
             self.is_calibrating = False  # 标识定标完成
+
+    
+    def flush_log(self,msg):
+        cursor = self.log_box.textCursor()
+        cursor.movePosition(cursor.End)
+
+        fmt = QTextCharFormat()
+        # 文字固定黑色，只靠前面emoji区分等级
+        fmt.setForeground(QColor("#000000"))
+        if "info" in msg.lower():
+            prefix = "🟢 "
+        elif "error" in msg.lower():
+            prefix = "🔴 "
+        elif "warn" in msg.lower():
+            prefix = "🟡 "
+        else:
+            prefix = "⚪ "
+        full_text=f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
+        cursor.insertText(full_text, fmt)
+        self.log_box.setTextCursor(cursor)
+        # 自动滚动到底部
+        sb=self.log_box.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+        # 写入本地txt日志
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, "a", encoding="utf-8") as f:
+                    f.write(full_text)
+            except Exception as log_err:
+                # 日志写入失败不打断主流程
+                print(f"write log file failed: {log_err}")
 
     def get_lum_rad_folder_rule(self, config_path):
         self.ini_path = config_path+"/"+"config.ini"
@@ -676,23 +842,15 @@ class MonoCalibrationWindow(QDialog):
             self.temp = False
             return
 
-    def update_status(self, message):
-        self.status_label.setText(
-            f"<span style='color: green;'>状态: {message}</span>")
-
     def on_calibration_finished(self):
         QMessageBox.information(self, "MLColorimeter",
                                 "单色定标完成!", QMessageBox.Ok)
-        self.status_label.setText(
-            "<span style='color: green;'>状态: 单色定标完成！</span>")  # 更新状态
         self.btn_capture.setEnabled(True)
         self.is_calibrating = False  # 标识定标完成
 
     def on_calibration_error(self, error_message):
         QMessageBox.critical(self, "MLColorimeter",
                              "发生错误: " + error_message, QMessageBox.Ok)
-        self.status_label.setText(
-            f"<span style='color: red;'>状态: 发生错误: {error_message}</span>")  # 更新状态为红色
         self.btn_capture.setEnabled(True)
         self.is_calibrating = False  # 标识定标完成
 
@@ -702,6 +860,9 @@ class MonoCalibrationWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "定标进行中，请勿关闭窗口", QMessageBox.Ok)
         else:
+            #==============关闭窗口保存当前UI参数====================
+            p=self.read_ui_params()
+            self.cfg_helper.save_params(p)
             event.accept()
 
     def generate_luminance_dict(self):
