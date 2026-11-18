@@ -7,7 +7,8 @@ import csv
 import os
 from typing import List,Dict,Tuple
 import mlcolorimeter as mlcm
-import time
+import matplotlib
+matplotlib.use('Agg')
 
 
 def get_FFC_1(filepath, loop):

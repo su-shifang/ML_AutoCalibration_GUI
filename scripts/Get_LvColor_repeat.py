@@ -2,11 +2,11 @@
 from cv2 import blur
 from PIL import Image
 import numpy as np
-from pandas import read_csv, DataFrame,concat
 import os
-import json
 import matplotlib.pyplot as plt
 import cv2
+import matplotlib
+matplotlib.use('Agg')
 
 def get_CIEu_CIEv(srXpath, srYpath, srZpath, blursize):
     srcX = np.array(Image.open(srXpath))

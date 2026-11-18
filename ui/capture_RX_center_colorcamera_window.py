@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon
+from PyQt5.QtGui import QIntValidator, QIcon
 from core.app_config import AppConfig
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm

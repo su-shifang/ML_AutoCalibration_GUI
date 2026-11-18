@@ -1,8 +1,6 @@
 import mlcolorimeter as mlcm
 import cv2
-from typing import List, Dict
-import os
-import time
+from typing import List
 
 """
     center_fit.py is an example script that shows a simplified way to fit rx cross center with circle.

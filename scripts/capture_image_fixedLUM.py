@@ -1,9 +1,7 @@
 import mlcolorimeter as mlcm
-from typing import List, Dict
-import numpy as np
+from typing import List
 import cv2
 import os
-import time
 
 
 # def capture_image_fixedLUM(

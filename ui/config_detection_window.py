@@ -7,21 +7,14 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QMessageBox,
     QCheckBox,
-    QGroupBox,
     QGridLayout,
     QSpacerItem,
     QDialog,
-    QComboBox,
-    QFormLayout,
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon
 from core.app_config import AppConfig
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
-import mlcolorimeter as mlcm
 from scripts.config_detection import config_detection
-import os
-import configparser
-import json
 
 
 class ConfigDetectionThread(QThread):

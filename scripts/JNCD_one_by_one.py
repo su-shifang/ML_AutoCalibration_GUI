@@ -1,9 +1,10 @@
 import cv2
 from cv2 import blur
-from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
+import matplotlib
+matplotlib.use('Agg')
 
 
 def get_CIEu_CIEv(filepath, loop):

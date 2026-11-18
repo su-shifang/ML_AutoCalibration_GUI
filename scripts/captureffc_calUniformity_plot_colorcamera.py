@@ -1,15 +1,12 @@
 import mlcolorimeter as mlcm
 from typing import List, Dict
 import cv2
-import csv
-import os
 import numpy as np
 from datetime import datetime
-from threading import Thread
-import time
 import matplotlib.pyplot as plt
+import matplotlib
 from openpyxl import Workbook, load_workbook
-
+matplotlib.use('Agg')
 
 __all__ = ["cal_synthetic_mean_images", "capture_ffc_images", "cal_uniformity"] # type: ignore
 

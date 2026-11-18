@@ -6,6 +6,8 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
+import matplotlib
+matplotlib.use('Agg')
 
 
 def get_FFC(filepath, loop):

@@ -21,10 +21,6 @@ from core.app_config import AppConfig
 from core.config_helper import UiConfigHelper,MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt,QThread
 import mlcolorimeter as mlcm
-import numpy as np
-import matplotlib.pyplot as plt
-from openpyxl import Workbook, load_workbook
-from openpyxl.drawing.image import Image
 from scripts.field_curve import field_curve
 import json,os
 from datetime import datetime
@@ -794,7 +790,7 @@ class FiledCurveWindow(QDialog):
             QMessageBox.warning(self,"警告","程序运行中，请勿关闭窗口",QMessageBox.Ok)
         else:
             #==============关闭窗口保存当前UI参数====================
-            p=self.read_ui_params()
+            p=self.collect_ui_params()
             self.cfg_helper.save_params(p)
             event.accept()
 

@@ -4,12 +4,8 @@ import os
 import time
 import mlcolorimeter as mlcm
 import cv2
-import numpy as np
 from datetime import datetime
 import pandas as pd
-from openpyxl import load_workbook
-from openpyxl.drawing.image import Image
-import matplotlib.pyplot as plt
 import json
 from typing import List
 

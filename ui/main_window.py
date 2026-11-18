@@ -12,7 +12,7 @@ from core.app_config import AppConfig
 from ui.settings_window import SettingsWindow
 from ui.dark_heatmap_window import DarkHeatMapWindow
 from ui.captureffc_uniformity_plot_window import CaptureFFC_CalUniformity_Plot_Window
-from ui.mono_calibration import MonoCalibrationWindow
+from ui.mono_calibration_window import MonoCalibrationWindow
 from ui.calculate_sph_cyl_coefficient_window import CalculateSphCylCoefficientWindow
 from ui.capture_center_window import CaptureCenterWindow
 from ui.capture_image_fixedLUM_window import CaptureImageFixedLUMWindow

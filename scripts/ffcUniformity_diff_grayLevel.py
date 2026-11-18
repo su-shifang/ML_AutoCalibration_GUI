@@ -7,8 +7,9 @@ import csv
 import os
 from typing import List, Dict
 import mlcolorimeter as mlcm
-from openpyxl import Workbook, load_workbook
 
+import matplotlib
+matplotlib.use('Agg')
 
 def get_FFC(filepath, loop):
     srcX = np.array(Image.open(filepath + str(loop) + '0%_ND0_X_FFC.tif'))

@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import messagebox
 import pandas as pd
 from datetime import datetime
-from typing import List, Dict
+from typing import List
 import time
 
 # Function to show a message box with the light source information

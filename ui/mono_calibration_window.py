@@ -26,7 +26,6 @@ from core.app_config import AppConfig
 from core.config_helper import UiConfigHelper,MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
-import cv2
 from scripts.mono_calibration import mono_calibration, mono_calibration_do_ffc
 import configparser
 from datetime import datetime

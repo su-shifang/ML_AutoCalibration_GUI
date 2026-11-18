@@ -1,23 +1,17 @@
 from PyQt5.QtWidgets import (
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QFileDialog,
     QSizePolicy,
     QMessageBox,
-    QCheckBox,
-    QGroupBox,
     QGridLayout,
     QSpacerItem,
     QDialog,
-    QComboBox,
-    QFormLayout,
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon
 from core.app_config import AppConfig
-from PyQt5.QtCore import pyqtSignal, Qt, QThread, QTimer
-import mlcolorimeter as mlcm
+from PyQt5.QtCore import pyqtSignal, Qt
 import os
 import configparser
 import json
@@ -25,7 +19,6 @@ import itertools
 import pandas as pd
 import win32com.client
 import pythoncom
-import time
 import ctypes
 
 

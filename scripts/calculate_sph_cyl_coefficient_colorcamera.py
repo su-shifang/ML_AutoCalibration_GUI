@@ -1,9 +1,6 @@
 import mlcolorimeter as mlcm
-from typing import List, Dict
+from typing import List
 import cv2
-import csv
-import os
-import numpy as np
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
 

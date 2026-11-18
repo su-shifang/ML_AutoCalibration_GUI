@@ -1,6 +1,5 @@
 import mlcolorimeter as mlcm
 import cv2
-from typing import List, Dict
 import os
 
 """

@@ -2,6 +2,7 @@ import mlcolorimeter as mlcm
 import os
 import cv2
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image
@@ -9,6 +10,7 @@ from typing import List, Dict, Optional, Callable, Literal
 from datetime import datetime
 MsgLevel = Literal["INFO", "WARN", "ERROR"]
 
+matplotlib.use('Agg')
 
 def preprocess_image(img, block_size):
     height, width = img.shape[:2]

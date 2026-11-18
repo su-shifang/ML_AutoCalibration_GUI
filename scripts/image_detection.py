@@ -1,7 +1,5 @@
 import os
 from PIL import Image
-import tkinter as tk
-from tkinter import messagebox
 
 def get_image_resolution(file_path):
     with Image.open(file_path) as img:
