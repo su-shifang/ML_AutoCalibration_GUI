@@ -25,10 +25,40 @@ import matplotlib.pyplot as plt
 from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image
 from scripts.field_curve import field_curve
-import json
+import json,os,sys
 from datetime import datetime
 from typing import Literal
 MsgLevel = Literal["INFO", "WARN", "ERROR"]
+
+def get_exe_dir():
+    if hasattr(sys, '_MEIPASS'):
+        exe_path = sys.executable
+    else:
+        exe_path = __file__
+    return os.path.dirname(os.path.abspath(exe_path))
+
+CFG_NAME = "field_curve_params.json"
+CFG_PATH = os.path.join(get_exe_dir(), CFG_NAME)
+
+def save_last_ui_params(param_dict: dict):
+    try:
+        with open(CFG_PATH, "w", encoding="utf-8") as f:
+            json.dump(param_dict, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"保存FieldCurve参数失败: {e}")
+
+def load_last_ui_params(default_dict: dict):
+    if not os.path.exists(CFG_PATH):
+        return default_dict.copy()
+    try:
+        with open(CFG_PATH, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        out = default_dict.copy()
+        out.update(loaded)
+        return out
+    except Exception as e:
+        print(f"加载FieldCurve参数异常，使用默认: {e}")
+        return default_dict.copy()
 
 class FiledCurveThread(QThread):
     finished=pyqtSignal() # 线程完成信号
@@ -67,10 +97,44 @@ class FiledCurveWindow(QDialog):
         self.exposure_mode=['Auto','Fixed']
         self.binning_selector=['Logic','Sensor']
         self.binning_mode=['AVERAGE','SUM']
-        self.pixel_format=['MLMono8','MLMono10','MLMono12','MLMono16','MLRGB24','MLBayer','MLBayerGB8','MLBayerGB12']
+        self.pixel_format=['MLMono8','MLMono10','MLMono12','MLMono16','MLRGB24','MLBayer','MLBayerGB8','MLBayerGB12']     
+        self.log_file_path=""
         self._init_ui()
 
         self.is_running=False
+        # 默认参数模板
+        self.default_ui_params = {
+            "binn_selector": "Logic",
+            "binn_mode": "AVERAGE",
+            "binn": "0",
+            "pixel_format": "MLMono12",
+            "exposure_mode": "Auto",
+            "exposure_time": "100",
+            "focus_max": "37",
+            "focus_min": "12",
+            "inf_pos": "25.22",
+            "focal_length": "39.7",
+            "pixel_size": "0.0035",
+            "focal_space": "-2.92",
+            "use_chess_mode": True,
+            "use_lpmm_unit": True,
+            "rough_step": "0.5",
+            "use_fine_adjust": False,
+            "fine_step": "0.1",
+            "average_count": "1",
+            "save_result_image": False,
+            "save_roi_text": "6000 6000 500 500",
+            "image_save_path": "",
+            "freq_list_text": "6.75",
+            "roi_x": "0",
+            "roi_y": "0",
+            "roi_w": "100",
+            "roi_h": "100",
+            "out_path": "",
+            "roi_serial": []
+        }
+        self.cur_ui_params = load_last_ui_params(self.default_ui_params)
+        self.fill_ui_by_params(self.cur_ui_params)
     
     def _init_ui(self):
         grid_layout = QGridLayout()
@@ -340,6 +404,7 @@ class FiledCurveWindow(QDialog):
 
         self.roi_display=QListWidget()
         self.roi_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.roi_display.itemDoubleClicked.connect(self.on_roi_double_click)
         from_layout1.addRow(self.roi_display)
 
         group_box1.setLayout(from_layout1)
@@ -376,7 +441,99 @@ class FiledCurveWindow(QDialog):
         self.label_image_save_path.setEnabled(False)
         self.line_edit_image_save_path.setEnabled(False)
         self.btn_select.setEnabled(False)
-    
+    def on_roi_double_click(self,item):
+        x,y,w,h=map(int,item.text().split(","))
+        self.line_edit_x_input.setText(str(x))
+        self.line_edit_y_input.setText(str(y))
+        self.line_edit_width_input.setText(str(w))
+        self.line_edit_height_input.setText(str(h))
+        
+    def fill_ui_by_params(self, params: dict):
+        # 回填下拉框
+        idx = self.line_edit_binn_selector.findText(params["binn_selector"])
+        if idx >=0:
+            self.line_edit_binn_selector.setCurrentIndex(idx)
+        idx = self.line_edit_binn_mode.findText(params["binn_mode"])
+        if idx >=0:
+            self.line_edit_binn_mode.setCurrentIndex(idx)
+        idx = self.line_edit_exposure_mode.findText(params["exposure_mode"])
+        if idx >=0:
+            self.line_edit_exposure_mode.setCurrentIndex(idx)
+        idx = self.line_edit_pixel_format.findText(params["pixel_format"])
+        if idx >=0:
+            self.line_edit_pixel_format.setCurrentIndex(idx)
+
+        self.line_edit_binnlist.setText(params["binn"])
+        self.line_edit_exposure_time.setText(params["exposure_time"])
+        self.line_edit_focus_max.setText(params["focus_max"])
+        self.line_edit_focus_min.setText(params["focus_min"])
+        self.line_edit_inf_pos.setText(params["inf_pos"])
+        self.line_edit_focal_length.setText(params["focal_length"])
+        self.line_edit_pixel_size.setText(params["pixel_size"])
+        self.line_edit_focal_space.setText(params["focal_space"])
+        self.line_edit_rough_step.setText(params["rough_step"])
+        self.line_edit_fine_step.setText(params["fine_step"])
+        self.line_edit_average_count.setText(params["average_count"])
+        self.line_edit_save_roi.setText(params["save_roi_text"])
+        self.line_edit_image_save_path.setText(params["image_save_path"])
+        self.line_edit_freq_list.setText(params["freq_list_text"])
+        self.line_edit_x_input.setText(params["roi_x"])
+        self.line_edit_y_input.setText(params["roi_y"])
+        self.line_edit_width_input.setText(params["roi_w"])
+        self.line_edit_height_input.setText(params["roi_h"])
+        self.line_edit_path.setText(params["out_path"])
+
+        self.line_edit_use_chess_mode.setChecked(params["use_chess_mode"])
+        self.line_edit_use_lpmm_unit.setChecked(params["use_lpmm_unit"])
+        self.line_edit_use_fine_adjust.setChecked(params["use_fine_adjust"])
+        self.line_edit_save_result_image.setChecked(params["save_result_image"])
+
+        # 回填ROI列表
+        self.roi_list.clear()
+        self.roi_display.clear()
+        for item in params.get("roi_serial", []):
+            rect = mlcm.pyCVRect(item["x"], item["y"], item["width"], item["height"])
+            self.roi_list.append(rect)
+            self.roi_display.addItem(f"{rect.x},{rect.y},{rect.width},{rect.height}")
+        self.line_edit_roi_count.setText(str(len(self.roi_list)))
+        self._use_state_changed()
+
+    def collect_ui_params(self) -> dict:
+        roi_serial = []
+        for r in self.roi_list:
+            roi_serial.append(self.serialize_pyCVRect(r))
+        param_dict = {
+            "binn_selector": self.line_edit_binn_selector.currentText(),
+            "binn_mode": self.line_edit_binn_mode.currentText(),
+            "binn": self.line_edit_binnlist.text().strip(),
+            "pixel_format": self.line_edit_pixel_format.currentText(),
+            "exposure_mode": self.line_edit_exposure_mode.currentText(),
+            "exposure_time": self.line_edit_exposure_time.text().strip(),
+            "focus_max": self.line_edit_focus_max.text().strip(),
+            "focus_min": self.line_edit_focus_min.text().strip(),
+            "inf_pos": self.line_edit_inf_pos.text().strip(),
+            "focal_length": self.line_edit_focal_length.text().strip(),
+            "pixel_size": self.line_edit_pixel_size.text().strip(),
+            "focal_space": self.line_edit_focal_space.text().strip(),
+            "use_chess_mode": self.line_edit_use_chess_mode.isChecked(),
+            "use_lpmm_unit": self.line_edit_use_lpmm_unit.isChecked(),
+            "rough_step": self.line_edit_rough_step.text().strip(),
+            "use_fine_adjust": self.line_edit_use_fine_adjust.isChecked(),
+            "fine_step": self.line_edit_fine_step.text().strip(),
+            "average_count": self.line_edit_average_count.text().strip(),
+            "save_result_image": self.line_edit_save_result_image.isChecked(),
+            "save_roi_text": self.line_edit_save_roi.text().strip(),
+            "image_save_path": self.line_edit_image_save_path.text().strip(),
+            "freq_list_text": self.line_edit_freq_list.text().strip(),
+            "roi_x": self.line_edit_x_input.text().strip(),
+            "roi_y": self.line_edit_y_input.text().strip(),
+            "roi_w": self.line_edit_width_input.text().strip(),
+            "roi_h": self.line_edit_height_input.text().strip(),
+            "out_path": self.line_edit_path.text().strip(),
+            "roi_serial": roi_serial
+        }
+        return param_dict
+
     def _use_state_changed(self):
         if self.line_edit_save_result_image.isChecked():
             self.label_save_roi.setEnabled(True)
@@ -531,6 +688,9 @@ class FiledCurveWindow(QDialog):
             self.exposure=mlcm.pyExposureSetting(exposure_mode=self.exposure_mode,exposure_time=self.exposure_time)
             self.focus_max=float(self.line_edit_focus_max.text().strip())
             self.focus_min=float(self.line_edit_focus_min.text().strip())
+            if self.focus_min>=self.focus_max:
+                QMessageBox.warning(self,"参数错误", "focus_min必须小于focus_max")
+                return
             self.inf_pos=float(self.line_edit_inf_pos.text().strip())
             self.focal_length=float(self.line_edit_focal_length.text().strip())
             self.pixel_size=float(self.line_edit_pixel_size.text().strip())
@@ -567,6 +727,10 @@ class FiledCurveWindow(QDialog):
             if not self.out_path:
                 QMessageBox.critical(self,"MLColorimeter","请选择保存路径",QMessageBox.Yes | QMessageBox.No,QMessageBox.Yes)
                 return
+            
+            # ========== 生成本次运行的时间戳，用于日志文件 ==========
+            run_ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]
+            self.log_file_path = os.path.join(self.out_path, f"{run_ts}_field_curve_log.txt")
             
             self.focus_config=mlcm.pyFocusScanConfig_(
                 focus_max=self.focus_max,
@@ -634,6 +798,14 @@ class FiledCurveWindow(QDialog):
         # 自动滚动到底部
         sb=self.log_box.verticalScrollBar()
         sb.setValue(sb.maximum())
+        # 写入本地txt日志
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, "a", encoding="utf-8") as f:
+                    f.write(full_text)
+            except Exception as log_err:
+                # 日志写入失败不打断主流程
+                print(f"write log file failed: {log_err}")
 
     def on_filed_curve_finished(self):
         QMessageBox.information(self,"MLColorimeter","拍图完成!",QMessageBox.Ok)
@@ -651,6 +823,9 @@ class FiledCurveWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self,"警告","程序运行中，请勿关闭窗口",QMessageBox.Ok)
         else:
+            #==============关闭窗口保存当前UI参数====================
+            p=self.collect_ui_params()
+            save_last_ui_params(p)
             event.accept()
 
     def get_current_pixel_format(self):
