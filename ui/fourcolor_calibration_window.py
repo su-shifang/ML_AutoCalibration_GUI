@@ -15,15 +15,16 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon,QColor,QTextCharFormat
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon, QColor, QTextCharFormat
 from core.app_config import AppConfig
-from core.config_helper import UiConfigHelper,MsgLevel
+from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.fourcolor_calibration import fourcolor_calibration_capture, fourcolor_calibration_calculate
 from ui.exposureconfig_window import ExposureConfigWindow
 from datetime import datetime
 import os
+
 
 class FourColorCalibrationCaptureThread(QThread):
     finished = pyqtSignal()  # 线程完成信号
@@ -37,10 +38,10 @@ class FourColorCalibrationCaptureThread(QThread):
     def run(self):
         try:
             # 包装回调：接受level，msg，拼接成字符串再发给信号
-            def callback_wrapper(level: MsgLevel,msg:str):
+            def callback_wrapper(level: MsgLevel, msg: str):
                 self.status_update.emit(msg)
             fourcolor_calibration_capture(
-                status_callback=callback_wrapper, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -58,10 +59,10 @@ class FourColorCalibrationCalculateThread(QThread):
     def run(self):
         try:
             # 包装回调：接受level，msg，拼接成字符串再发给信号
-            def callback_wrapper(level: MsgLevel,msg:str):
+            def callback_wrapper(level: MsgLevel, msg: str):
                 self.status_update.emit(msg)
             fourcolor_calibration_calculate(
-                status_callback=callback_wrapper, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -75,7 +76,7 @@ class FourColorCalabrationWindow(QDialog):
         self.colorimeter = AppConfig.get_colorimeter()
         self.ml_mono = self.colorimeter.ml_bino_manage.ml_get_module_by_id(1)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)  # type: ignore
         self.setWindowIcon(QIcon(
             "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.intValidator = QIntValidator()
@@ -88,32 +89,33 @@ class FourColorCalabrationWindow(QDialog):
         self.pixel_format = ['MLMono8', 'MLMono10', 'MLMono12',
                              'MLMono16', 'MLRGB24', 'MLBayer', 'MLBayerGB8', 'MLBayerGB12']
         self.exposure_map_obj = {}
-        self.log_file_path=""
-        self.cfg_helper=UiConfigHelper("fourcolor_calibration_params.json")
+        self.log_file_path = ""
+        self.cfg_helper = UiConfigHelper("fourcolor_calibration_params.json")
         self._init_ui()
         self.is_running = False
 
-        #=====================默认参数，加载历史参数并回填UI==============================
-        self.default_ui_params={
-            "binn_selector":"Logic",
-            "binn_mode":"AVERAGE",
-            "binn":"0",
-            "pixel_format":"MLMono12",
-            "nd_text":"4",
-            "xyz_text":"1",
-            "sph_text":"-6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6",
-            "cyl_text":"-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
-            "count_text":"1",
-            "roi_x":"0",
-            "roi_y":"0",
-            "roi_w":"300",
-            "roi_h":"300",
-            "is_do_ffc":False,
-            "save_path":"",
-            "nmatrix_path":"",
-            "exposure_map_serial":{}
+        # =====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params = {
+            "binn_selector": "Logic",
+            "binn_mode": "AVERAGE",
+            "binn": "0",
+            "pixel_format": "MLMono12",
+            "nd_text": "4",
+            "xyz_text": "1",
+            "sph_text": "-6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6",
+            "cyl_text": "-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
+            "count_text": "1",
+            "roi_x": "0",
+            "roi_y": "0",
+            "roi_w": "300",
+            "roi_h": "300",
+            "is_do_ffc": False,
+            "save_path": "",
+            "nmatrix_path": "",
+            "exposure_map_serial": {}
         }
-        self.cur_ui_params=self.cfg_helper.load_params(self.default_ui_params)
+        self.cur_ui_params = self.cfg_helper.load_params(
+            self.default_ui_params)
         self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
@@ -153,7 +155,7 @@ class FourColorCalabrationWindow(QDialog):
 
         self.label_pixel_format = QLabel(" pixel_format：")
         self.line_edit_pixel_format = QComboBox()
-        self.line_edit_pixel_format.addItems(self.pixel_format) # type: ignore
+        self.line_edit_pixel_format.addItems(self.pixel_format)  # type: ignore
         self.line_edit_pixel_format.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.line_edit_pixel_format.setCurrentText("MLMono12")
@@ -287,9 +289,9 @@ class FourColorCalabrationWindow(QDialog):
         self.btn_start_calibration.clicked.connect(self._start_calibration)
         grid_layout.addWidget(self.btn_start_calibration, 14, 0)
 
-        self.log_box=QPlainTextEdit()
+        self.log_box = QPlainTextEdit()
         self.log_box.setReadOnly(True)
-        grid_layout.addWidget(self.log_box,15,0)
+        grid_layout.addWidget(self.log_box, 15, 0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -298,7 +300,8 @@ class FourColorCalabrationWindow(QDialog):
         self.setLayout(grid_layout)
 
     def fill_ui_by_params(self, params: dict):
-        binn_sel_idx = self.line_edit_binn_selector.findText(params["binn_selector"])
+        binn_sel_idx = self.line_edit_binn_selector.findText(
+            params["binn_selector"])
         if binn_sel_idx >= 0:
             self.line_edit_binn_selector.setCurrentIndex(binn_sel_idx)
         binn_mode_idx = self.line_edit_binn_mode.findText(params["binn_mode"])
@@ -323,27 +326,28 @@ class FourColorCalabrationWindow(QDialog):
 
         self.line_edit_path.setText(params["save_path"])
         self.line_edit_NMatrix_path.setText(params["nmatrix_path"])
-        serial_map=params.get("exposure_map_serial",{})
-        self.exposure_map_obj={}
-        for nd_name,xyz_dict in serial_map.items():
-            nd_enum=mlcm.str_to_MLFilterEnum(nd_name)
-            self.exposure_map_obj[nd_enum]={}
-            for xyz_name,setting_data in xyz_dict.items():
-                xyz_enum=mlcm.str_to_MLFilterEnum(xyz_name)
-                emode=mlcm.ExposureMode.Fixed if setting_data["exposure_mode"]=="Fixed" else mlcm.ExposureMode.Auto
-                self.exposure_map_obj[nd_enum][xyz_enum]=mlcm.pyExposureSetting(
+        serial_map = params.get("exposure_map_serial", {})
+        self.exposure_map_obj = {}
+        for nd_name, xyz_dict in serial_map.items():
+            nd_enum = mlcm.str_to_MLFilterEnum(nd_name)
+            self.exposure_map_obj[nd_enum] = {}
+            for xyz_name, setting_data in xyz_dict.items():
+                xyz_enum = mlcm.str_to_MLFilterEnum(xyz_name)
+                emode = mlcm.ExposureMode.Fixed if setting_data[
+                    "exposure_mode"] == "Fixed" else mlcm.ExposureMode.Auto
+                self.exposure_map_obj[nd_enum][xyz_enum] = mlcm.pyExposureSetting(
                     exposure_mode=emode,
                     exposure_time=setting_data["exposure_time"]
                 )
-    
+
     def read_ui_params(self) -> dict:
-        exp_serial={}
-        for nd_enum,xyz_dict in self.exposure_map_obj.items():
-            exp_serial[nd_enum.name]={}
-            for xyz_enum,s in xyz_dict.items():
-                exp_serial[nd_enum.name][xyz_enum.name]={
-                    "exposure_mode":s.exposure_mode.name,
-                    "exposure_time":s.exposure_time
+        exp_serial = {}
+        for nd_enum, xyz_dict in self.exposure_map_obj.items():
+            exp_serial[nd_enum.name] = {}
+            for xyz_enum, s in xyz_dict.items():
+                exp_serial[nd_enum.name][xyz_enum.name] = {
+                    "exposure_mode": s.exposure_mode.name,
+                    "exposure_time": s.exposure_time
                 }
         param_dict = {
             "binn_selector": self.line_edit_binn_selector.currentText(),
@@ -359,7 +363,7 @@ class FourColorCalabrationWindow(QDialog):
             "roi_h": self.line_edit_height_input.text().strip(),
             "is_do_ffc": self.checkbox_is_do_ffc.isChecked(),
             "save_path": self.line_edit_path.text().strip(),
-            "nmatrix_path":self.line_edit_NMatrix_path.text().strip(),
+            "nmatrix_path": self.line_edit_NMatrix_path.text().strip(),
             "exposure_map_serial": exp_serial
         }
         return param_dict
@@ -394,27 +398,29 @@ class FourColorCalabrationWindow(QDialog):
                 QMessageBox.critical(self, "MLColorimeter", "请设置曝光",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 return
-            # ========== 生成本次运行的时间戳，用于日志文件 ==========
-            run_ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]
-            self.log_file_path = os.path.join(self.save_path, f"{run_ts}_fourcolor_calibration_log.txt")
+
+            # 新建日志文件
+            self.log_file_path = os.path.join(
+                self.cfg_helper.log_path, f"fourcolor_calibration_log.txt")
 
             self.light_source_list = ["R", "G", "B", "W"]
             self.btn_start_calibration.setEnabled(False)
             self.is_running = True
             if self.ml_mono.mono is None:
-                raise RuntimeError("mono is None, Please connect mlcolorimeter")
+                raise RuntimeError(
+                    "mono is None, Please connect mlcolorimeter")
             self.auto_cali = mlcm.pyMLAutoCalibration(self.ml_mono)
 
             # 从第一个ND开始捕获光源
             self.current_nd_index = 0
             self.start_capture_for_light_source(self.current_nd_index)
         except RuntimeError as e:
-            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}", # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_start_calibration.setEnabled(True)
             self.is_running = False
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}", # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_start_calibration.setEnabled(True)
             self.is_running = False
@@ -440,7 +446,8 @@ class FourColorCalabrationWindow(QDialog):
             self, "提示", f"请先切换到{light_source}光", QMessageBox.Ok)
         if temp == QMessageBox.Ok:
             if nd not in self.exposure_map_obj:
-                raise RuntimeError(f"ND {mlcm.MLFilterEnum_to_str(nd)} 没有配置曝光参数，请先打开曝光配置窗口配置")
+                raise RuntimeError(
+                    f"ND {mlcm.MLFilterEnum_to_str(nd)} 没有配置曝光参数，请先打开曝光配置窗口配置")
             exposure_map = self.exposure_map_obj[nd]
             capture_parameters = {
                 'auto_cali': self.auto_cali,
@@ -499,8 +506,7 @@ class FourColorCalabrationWindow(QDialog):
         self.btn_start_calibration.setEnabled(True)
         self.is_running = False  # 标识完成
 
-
-    def flush_log(self,msg):
+    def flush_log(self, msg):
         cursor = self.log_box.textCursor()
         cursor.movePosition(cursor.End)
 
@@ -515,11 +521,11 @@ class FourColorCalabrationWindow(QDialog):
             prefix = "🟡 "
         else:
             prefix = "⚪ "
-        full_text=f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
+        full_text = f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
         cursor.insertText(full_text, fmt)
         self.log_box.setTextCursor(cursor)
         # 自动滚动到底部
-        sb=self.log_box.verticalScrollBar()
+        sb = self.log_box.verticalScrollBar()
         sb.setValue(sb.maximum())
         # 写入本地txt日志
         if self.log_file_path:
@@ -536,8 +542,8 @@ class FourColorCalabrationWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "程序运行中，请勿关闭窗口", QMessageBox.Ok)
         else:
-            #==============关闭窗口保存当前UI参数====================
-            p=self.read_ui_params()
+            # ==============关闭窗口保存当前UI参数====================
+            p = self.read_ui_params()
             self.cfg_helper.save_params(p)
             event.accept()
 
@@ -547,7 +553,7 @@ class FourColorCalabrationWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,  # type: ignore
         )
 
         if folder_path:
@@ -574,13 +580,13 @@ class FourColorCalabrationWindow(QDialog):
             nd_list = self.line_edit_ndlist.text().strip().split()
             xyz_list = self.line_edit_xyzlist.text().strip().split()
             self.exposure_config_window = ExposureConfigWindow(
-                nd_list, xyz_list,self.exposure_map_obj)
+                nd_list, xyz_list, self.exposure_map_obj)
             # 连接信号
             self.exposure_config_window.config_saved.connect(
                 self.update_config)
             self.exposure_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}", # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_config(self, exposure_map):
@@ -615,7 +621,7 @@ class FourColorCalabrationWindow(QDialog):
         # 获取对应的枚举值
         pixel_format_enum = format_mapping.get(selected_format)
         return pixel_format_enum
-    
+
     def get_current_binning_selector(self):
         # 获取当前选择的项
         selected_selector = self.line_edit_binn_selector.currentText()

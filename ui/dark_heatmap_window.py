@@ -14,14 +14,15 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon,QTextCharFormat,QColor
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon, QTextCharFormat, QColor
 from core.app_config import AppConfig
-from core.config_helper import UiConfigHelper,MsgLevel
+from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.capture_dark_heatmap import capture_dark_heatmap
 import os
 from datetime import datetime
+
 
 class DarkHeatMapThread(QThread):
     finished = pyqtSignal()  # 线程完成信号
@@ -35,10 +36,10 @@ class DarkHeatMapThread(QThread):
     def run(self):
         try:
             # 包装回调：接受level，msg，拼接成字符串再发给信号
-            def callback_wrapper(level: MsgLevel,msg:str):
+            def callback_wrapper(level: MsgLevel, msg: str):
                 self.status_update.emit(msg)
             capture_dark_heatmap(
-                status_callback=callback_wrapper, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -54,7 +55,7 @@ class DarkHeatMapWindow(QDialog):
         self.setGeometry(200, 200, 800, 500)
         self.colorimeter = AppConfig.get_colorimeter()
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)  # type: ignore
         self.setWindowIcon(QIcon(
             "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.intValidator = QIntValidator()
@@ -68,26 +69,27 @@ class DarkHeatMapWindow(QDialog):
         self.binning_mode = ['AVERAGE', 'SUM']
         self.pixel_format = ['MLMono8', 'MLMono10', 'MLMono12',
                              'MLMono16', 'MLRGB24', 'MLBayer', 'MLBayerGB8', 'MLBayerGB12']
-        self.log_file_path=""
-        self.cfg_helper=UiConfigHelper("dark_heatmap_params.json")
+        self.log_file_path = ""
+        self.cfg_helper = UiConfigHelper("dark_heatmap_params.json")
         self._init_ui()
         self.is_running = False
 
-        #=====================默认参数，加载历史参数并回填UI==============================
-        self.default_ui_params={
-            "binn_selector":"Logic",
-            "binn_mode":"AVERAGE",
-            "binn":"0",
-            "pixel_format":"MLMono12",
-            "avg_count":"1",
-            "et_list":"1 10",
-            "binn_list":"0",
-            "nd_list":"4 5",
-            "xyz_list":"1 2",
-            "save_path":"",
-            "file_name":"dark_heatmap"
+        # =====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params = {
+            "binn_selector": "Logic",
+            "binn_mode": "AVERAGE",
+            "binn": "0",
+            "pixel_format": "MLMono12",
+            "avg_count": "1",
+            "et_list": "1 10",
+            "binn_list": "0",
+            "nd_list": "4 5",
+            "xyz_list": "1 2",
+            "save_path": "",
+            "file_name": "dark_heatmap"
         }
-        self.cur_ui_params=self.cfg_helper.load_params(self.default_ui_params)
+        self.cur_ui_params = self.cfg_helper.load_params(
+            self.default_ui_params)
         self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
@@ -127,7 +129,7 @@ class DarkHeatMapWindow(QDialog):
 
         self.label_pixel_format = QLabel(" pixel_format：")
         self.line_edit_pixel_format = QComboBox()
-        self.line_edit_pixel_format.addItems(self.pixel_format) # type: ignore
+        self.line_edit_pixel_format.addItems(self.pixel_format)  # type: ignore
         self.line_edit_pixel_format.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.line_edit_pixel_format.setCurrentText("MLMono12")
@@ -219,9 +221,9 @@ class DarkHeatMapWindow(QDialog):
         self.btn_capture.clicked.connect(self.start_capture)
         grid_layout.addWidget(self.btn_capture, 15, 0)
 
-        self.log_box=QPlainTextEdit()
+        self.log_box = QPlainTextEdit()
         self.log_box.setReadOnly(True)
-        grid_layout.addWidget(self.log_box,16,0)
+        grid_layout.addWidget(self.log_box, 16, 0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -229,9 +231,9 @@ class DarkHeatMapWindow(QDialog):
 
         self.setLayout(grid_layout)
 
-    
     def fill_ui_by_params(self, params: dict):
-        binn_sel_idx = self.line_edit_binn_selector.findText(params["binn_selector"])
+        binn_sel_idx = self.line_edit_binn_selector.findText(
+            params["binn_selector"])
         if binn_sel_idx >= 0:
             self.line_edit_binn_selector.setCurrentIndex(binn_sel_idx)
         binn_mode_idx = self.line_edit_binn_mode.findText(params["binn_mode"])
@@ -251,7 +253,7 @@ class DarkHeatMapWindow(QDialog):
         self.line_edit_xyzlist.setText(params["xyz_list"])
         self.line_edit_path.setText(params["save_path"])
         self.line_edit_filename.setText(params["file_name"])
-    
+
     def read_ui_params(self) -> dict:
         param_dict = {
             "binn_selector": self.line_edit_binn_selector.currentText(),
@@ -268,7 +270,7 @@ class DarkHeatMapWindow(QDialog):
         }
         return param_dict
 
-    def flush_log(self,msg):
+    def flush_log(self, msg):
         cursor = self.log_box.textCursor()
         cursor.movePosition(cursor.End)
 
@@ -283,11 +285,11 @@ class DarkHeatMapWindow(QDialog):
             prefix = "🟡 "
         else:
             prefix = "⚪ "
-        full_text=f"{prefix}{datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]} {msg}\n"
+        full_text = f"{prefix}{datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]} {msg}\n"
         cursor.insertText(full_text, fmt)
         self.log_box.setTextCursor(cursor)
         # 自动滚动到底部
-        sb=self.log_box.verticalScrollBar()
+        sb = self.log_box.verticalScrollBar()
         sb.setValue(sb.maximum())
 
         # 写入本地txt日志
@@ -298,14 +300,14 @@ class DarkHeatMapWindow(QDialog):
             except Exception as log_err:
                 # 日志写入失败不打断主流程
                 print(f"write log file failed: {log_err}")
-        
+
     def _open_folder_dialog(self):
         # 打开文件夹选择对话框
         folder_path = QFileDialog.getExistingDirectory(
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,  # type: ignore
         )
 
         if folder_path:
@@ -341,9 +343,9 @@ class DarkHeatMapWindow(QDialog):
                             for xyz in self.line_edit_xyzlist.text().split()]
             self.file_name = self.line_edit_filename.text() + ".xlsx"
 
-            # ========== 生成本次运行的时间戳，用于日志文件 ==========
-            run_ts = datetime.now().strftime('%Y-%m-%d')
-            self.log_file_path = os.path.join(self.save_path, f"{run_ts}_dark_heatmap_log.txt")
+            # 新建日志文件
+            self.log_file_path = os.path.join(
+                self.cfg_helper.log_path, f"dark_heatmap_log.txt")
 
             self.btn_capture.setEnabled(False)
             self.is_running = True
@@ -368,10 +370,10 @@ class DarkHeatMapWindow(QDialog):
             self.darkheatmapThread.status_update.connect(self.flush_log)
             self.darkheatmapThread.start()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e,  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
-            self.is_running = False 
+            self.is_running = False
 
     def on_darkheatmap_finished(self):
         QMessageBox.information(self, "MLColorimeter", "完成!", QMessageBox.Ok)
@@ -390,8 +392,8 @@ class DarkHeatMapWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "定标进行中，请勿关闭窗口", QMessageBox.Ok)
         else:
-            #==============关闭窗口保存当前UI参数====================
-            p=self.read_ui_params()
+            # ==============关闭窗口保存当前UI参数====================
+            p = self.read_ui_params()
             self.cfg_helper.save_params(p)
             event.accept()
 

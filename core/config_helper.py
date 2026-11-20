@@ -2,6 +2,7 @@ import sys
 import os
 import json
 from typing import Dict, Literal, Optional
+from datetime import datetime
 
 MsgLevel = Literal["INFO", "WARN", "ERROR"]
 
@@ -16,7 +17,20 @@ def get_exe_dir() -> str:
 
 class UiConfigHelper:
     def __init__(self, cfg_name: str):
-        self.cfg_path = os.path.join(get_exe_dir(), cfg_name)
+        self.json_path = os.path.join(get_exe_dir(), "config")
+        self.log_path = os.path.join(
+            get_exe_dir(), "log", datetime.now().strftime("%Y-%m-%d"))
+        os.makedirs(self.json_path, exist_ok=True)
+        os.makedirs(self.log_path, exist_ok=True)
+        self.cfg_path = os.path.join(self.json_path, cfg_name)
+
+    @property
+    def config_root(self) -> str:
+        return self.json_path
+
+    @property
+    def log_root(self) -> str:
+        return self.log_path
 
     def save_params(self, param_dict: Dict):
         try:

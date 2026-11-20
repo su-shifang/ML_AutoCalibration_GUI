@@ -320,10 +320,10 @@ class CaptureCenterWindow(QDialog):
                 QMessageBox.critical(self, "MLColorimeter", "请先选择保存路径",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 return
-            # ========== 生成本次运行的时间戳，用于日志文件 ==========
-            run_ts = datetime.now().strftime('%Y-%m-%d')
+            # 新建日志文件
             self.log_file_path = os.path.join(
-                self.save_path, f"{run_ts}_capture_center_log.txt")
+                self.cfg_helper.log_path, f"capture_center_log.txt")
+
             if self.cb_useRX.isChecked():
                 self.sph_list = [
                     float(sph) for sph in self.line_edit_sphlist.text().strip().split()]

@@ -173,3 +173,4 @@ manual.pdf
 ui/*.json
 core/*.json
 core/*.txt
+core/config/

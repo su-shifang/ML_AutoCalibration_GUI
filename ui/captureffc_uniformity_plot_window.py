@@ -683,10 +683,9 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
                     exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100),
                 mlcm.MLFilterEnum.YA: mlcm.pyExposureSetting(exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100),
             }
-            # ========== 生成本次运行的时间戳，用于日志文件 ==========
-            run_ts = datetime.now().strftime('%Y-%m-%d')
+            # 新建日志文件
             self.log_file_path = os.path.join(
-                f"{get_exe_dir()}", f"{run_ts}_captureffc_uniformity_log.txt")
+                self.cfg_helper.log_path, f"captureffc_uniformity_log.txt")
             self.start_capture_ffc()
 
         except Exception as e:

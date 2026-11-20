@@ -263,10 +263,9 @@ class CalculateSphCylCoefficientColorCameraWindow(QDialog):
                 QMessageBox.critical(self, "MLColorimeter", "请先选择保存路径",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 return
-            # ========== 生成本次运行的时间戳，用于日志文件 ==========
-            run_ts = datetime.now().strftime('%Y-%m-%d')
+            # 新建日志文件
             self.log_file_path = os.path.join(
-                self.save_path, f"{run_ts}_sph_cyl_color_log.txt")
+                self.cfg_helper.log_path, f"sph_cyl_color_log.txt")
 
             self.btn_capture.setEnabled(False)
             self.is_running = True
