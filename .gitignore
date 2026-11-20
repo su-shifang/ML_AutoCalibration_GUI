@@ -172,3 +172,4 @@ manual.md
 manual.pdf
 ui/*.json
 core/*.json
+core/*.txt

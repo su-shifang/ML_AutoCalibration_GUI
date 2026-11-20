@@ -10,18 +10,32 @@ from PyQt5.QtGui import QIcon
 class RXConfigWindow(QDialog):
     config_saved = pyqtSignal(dict)
 
-    def __init__(self, nd_list: List[mlcm.MLFilterEnum], parent=None):
+    def __init__(self, nd_list: List[mlcm.MLFilterEnum], rx_dict=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("RX config")
         self.setGeometry(250, 250, 400, 300)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)  # type: ignore
         self.setWindowIcon(QIcon(
             "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.nd_list = nd_list
         self.nd_input_fields = {}  # 用于存储输入框
+        self.rx_dict = rx_dict if rx_dict is not None else {}
         self.is_config_saved = False
         self._init_ui()
+        self.fill_ui_from_rx_dict()
+
+    def fill_ui_from_rx_dict(self):
+        """用构造函数传入的rx_dict回填UI（主窗口传过来的历史参数）"""
+        if not self.rx_dict:
+            return
+        for nd_str, (input_1, input_2, input_3) in self.nd_input_fields.items():
+            nd = mlcm.str_to_MLFilterEnum(nd_str)
+            if nd in self.rx_dict:
+                list_1, list_2, list_3 = self.rx_dict[nd]
+                input_1.setText(' '.join(map(str, list_1)))
+                input_2.setText(' '.join(map(str, list_2)))
+                input_3.setText(' '.join(map(str, list_3)))
 
     def _init_ui(self):
         scroll_area = QScrollArea()

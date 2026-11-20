@@ -862,6 +862,7 @@ class MonoCalibrationWindow(QDialog):
             #==============关闭窗口保存当前UI参数====================
             p=self.read_ui_params()
             self.cfg_helper.save_params(p)
+            self.deleteLater()
             event.accept()
 
     def generate_luminance_dict(self):

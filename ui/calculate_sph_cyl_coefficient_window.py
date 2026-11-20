@@ -13,15 +13,16 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon,QColor,QTextCharFormat
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon, QColor, QTextCharFormat
 from core.app_config import AppConfig
-from core.config_helper import UiConfigHelper,MsgLevel
+from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.calculate_sph_cyl_coefficient import calculate_sph_cyl_coefficient
 from ui.exposureconfig_window import ExposureConfigWindow
 from datetime import datetime
 import os
+
 
 class CalculateSphCylCoefficientThread(QThread):
     finished = pyqtSignal()  # 线程完成信号
@@ -35,10 +36,10 @@ class CalculateSphCylCoefficientThread(QThread):
     def run(self):
         try:
             # 包装回调：接受level，msg，拼接成字符串再发给信号
-            def callback_wrapper(level: MsgLevel,msg:str):
+            def callback_wrapper(level: MsgLevel, msg: str):
                 self.status_update.emit(msg)
             calculate_sph_cyl_coefficient(
-                status_callback=callback_wrapper, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -50,7 +51,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
         self.setWindowTitle("CalculateSphCylCoefficient")
         self.setGeometry(200, 200, 800, 500)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)  # type: ignore
         self.setWindowIcon(QIcon(
             "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
@@ -59,27 +60,28 @@ class CalculateSphCylCoefficientWindow(QDialog):
         self.dialog_title = "选择文件夹"
         self.default_path = ""
         self.exposure_map_obj = {}
-        self.log_file_path=""
-        self.cfg_helper=UiConfigHelper("sph_cyl_coefficient_params.json")
+        self.log_file_path = ""
+        self.cfg_helper = UiConfigHelper("sph_cyl_coefficient_params.json")
         self._init_ui()
 
         self.is_running = False
 
-        #=====================默认参数，加载历史参数并回填UI==============================
-        self.default_ui_params={
-            "nd_text":"4",
-            "xyz_text":"1",
-            "sph_text":"-6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6",
-            "cyl_text":"-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
-            "count_text":"1",
-            "roi_x":"0",
-            "roi_y":"0",
-            "roi_w":"300",
-            "roi_h":"300",
-            "save_path":"",
-            "exposure_map_serial":{}
+        # =====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params = {
+            "nd_text": "4",
+            "xyz_text": "1",
+            "sph_text": "-6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6",
+            "cyl_text": "-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
+            "count_text": "1",
+            "roi_x": "0",
+            "roi_y": "0",
+            "roi_w": "300",
+            "roi_h": "300",
+            "save_path": "",
+            "exposure_map_serial": {}
         }
-        self.cur_ui_params=self.cfg_helper.load_params(self.default_ui_params)
+        self.cur_ui_params = self.cfg_helper.load_params(
+            self.default_ui_params)
         self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
@@ -202,9 +204,9 @@ class CalculateSphCylCoefficientWindow(QDialog):
         self.btn_capture.clicked.connect(self.start_calculate)
         grid_layout.addWidget(self.btn_capture, 13, 0)
 
-        self.log_box=QPlainTextEdit()
+        self.log_box = QPlainTextEdit()
         self.log_box.setReadOnly(True)
-        grid_layout.addWidget(self.log_box,14,0)
+        grid_layout.addWidget(self.log_box, 14, 0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -213,7 +215,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
         self.setLayout(grid_layout)
 
     # 回填UI
-    def fill_ui_by_params(self,p):
+    def fill_ui_by_params(self, p):
         self.line_edit_ndlist.setText(p["nd_text"])
         self.line_edit_xyzlist.setText(p["xyz_text"])
         self.line_edit_sphlist.setText(p["sph_text"])
@@ -225,41 +227,42 @@ class CalculateSphCylCoefficientWindow(QDialog):
         self.line_edit_height_input.setText(p["roi_h"])
         self.line_edit_path.setText(p["save_path"])
 
-        serial_map=p.get("exposure_map_serial",{})
-        self.exposure_map_obj={}
-        for nd_name,xyz_dict in serial_map.items():
-            nd_enum=mlcm.str_to_MLFilterEnum(nd_name)
-            self.exposure_map_obj[nd_enum]={}
-            for xyz_name,setting_data in xyz_dict.items():
-                xyz_enum=mlcm.str_to_MLFilterEnum(xyz_name)
-                emode=mlcm.ExposureMode.Fixed if setting_data["exposure_mode"]=="Fixed" else mlcm.ExposureMode.Auto
-                self.exposure_map_obj[nd_enum][xyz_enum]=mlcm.pyExposureSetting(
+        serial_map = p.get("exposure_map_serial", {})
+        self.exposure_map_obj = {}
+        for nd_name, xyz_dict in serial_map.items():
+            nd_enum = mlcm.str_to_MLFilterEnum(nd_name)
+            self.exposure_map_obj[nd_enum] = {}
+            for xyz_name, setting_data in xyz_dict.items():
+                xyz_enum = mlcm.str_to_MLFilterEnum(xyz_name)
+                emode = mlcm.ExposureMode.Fixed if setting_data[
+                    "exposure_mode"] == "Fixed" else mlcm.ExposureMode.Auto
+                self.exposure_map_obj[nd_enum][xyz_enum] = mlcm.pyExposureSetting(
                     exposure_mode=emode,
                     exposure_time=setting_data["exposure_time"]
                 )
 
     # 读取当前UI所有参数，序列化
     def read_ui_params(self):
-        exp_serial={}
-        for nd_enum,xyz_dict in self.exposure_map_obj.items():
-            exp_serial[nd_enum.name]={}
-            for xyz_enum,s in xyz_dict.items():
-                exp_serial[nd_enum.name][xyz_enum.name]={
-                    "exposure_mode":s.exposure_mode.name,
-                    "exposure_time":s.exposure_time
+        exp_serial = {}
+        for nd_enum, xyz_dict in self.exposure_map_obj.items():
+            exp_serial[nd_enum.name] = {}
+            for xyz_enum, s in xyz_dict.items():
+                exp_serial[nd_enum.name][xyz_enum.name] = {
+                    "exposure_mode": s.exposure_mode.name,
+                    "exposure_time": s.exposure_time
                 }
-        return{
-            "nd_text":self.line_edit_ndlist.text().strip(),
-            "xyz_text":self.line_edit_xyzlist.text().strip(),
-            "sph_text":self.line_edit_sphlist.text().strip(),
-            "cyl_text":self.line_edit_cyllist.text().strip(),
-            "count_text":self.line_edit_count.text().strip(),
-            "roi_x":self.line_edit_x_input.text().strip(),
-            "roi_y":self.line_edit_y_input.text().strip(),
-            "roi_w":self.line_edit_width_input.text().strip(),
-            "roi_h":self.line_edit_height_input.text().strip(),
-            "save_path":self.line_edit_path.text().strip(),
-            "exposure_map_serial":exp_serial
+        return {
+            "nd_text": self.line_edit_ndlist.text().strip(),
+            "xyz_text": self.line_edit_xyzlist.text().strip(),
+            "sph_text": self.line_edit_sphlist.text().strip(),
+            "cyl_text": self.line_edit_cyllist.text().strip(),
+            "count_text": self.line_edit_count.text().strip(),
+            "roi_x": self.line_edit_x_input.text().strip(),
+            "roi_y": self.line_edit_y_input.text().strip(),
+            "roi_w": self.line_edit_width_input.text().strip(),
+            "roi_h": self.line_edit_height_input.text().strip(),
+            "save_path": self.line_edit_path.text().strip(),
+            "exposure_map_serial": exp_serial
         }
 
     def exposure_config(self):
@@ -267,13 +270,13 @@ class CalculateSphCylCoefficientWindow(QDialog):
             self.nd_list = self.line_edit_ndlist.text().strip().split()
             self.xyz_list = self.line_edit_xyzlist.text().strip().split()
             self.exposure_config_window = ExposureConfigWindow(
-                self.nd_list, self.xyz_list,exposure_map=self.exposure_map_obj)
+                self.nd_list, self.xyz_list, exposure_map=self.exposure_map_obj)
             # 连接信号
             self.exposure_config_window.config_saved.connect(
                 self.update_config)
             self.exposure_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}", # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_config(self, exposure_map):
@@ -298,7 +301,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,  # type: ignore
         )
 
         if folder_path:
@@ -309,9 +312,11 @@ class CalculateSphCylCoefficientWindow(QDialog):
 
     def start_calculate(self):
         try:
-            nd_enum=[int(nd) for nd in self.line_edit_ndlist.text().strip().split()]
+            nd_enum = [int(nd)
+                       for nd in self.line_edit_ndlist.text().strip().split()]
             self.nd_list = [mlcm.MLFilterEnum(nd) for nd in nd_enum]
-            xyz_enum=[int(xyz) for xyz in self.line_edit_xyzlist.text().strip().split()]
+            xyz_enum = [int(xyz)
+                        for xyz in self.line_edit_xyzlist.text().strip().split()]
             self.xyz_list = [mlcm.MLFilterEnum(xyz) for xyz in xyz_enum]
             self.sph_list = [
                 float(sph) for sph in self.line_edit_sphlist.text().strip().split()]
@@ -322,7 +327,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
             y = int(self.line_edit_y_input.text())
             width = int(self.line_edit_width_input.text())
             height = int(self.line_edit_height_input.text())
-            if width<=0 or height<=0:
+            if width <= 0 or height <= 0:
                 QMessageBox.critical(self, "MLColorimeter", "ROI宽高必须大于0",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 return
@@ -336,10 +341,11 @@ class CalculateSphCylCoefficientWindow(QDialog):
                 QMessageBox.critical(self, "MLColorimeter", "请设置曝光",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 return
-            
+
             # ========== 生成本次运行的时间戳，用于日志文件 ==========
             run_ts = datetime.now().strftime('%Y-%m-%d')
-            self.log_file_path = os.path.join(self.save_path, f"{run_ts}_sph_cyl_log.txt")
+            self.log_file_path = os.path.join(
+                self.save_path, f"{run_ts}_sph_cyl_log.txt")
 
             # 启动线程
             self.btn_exposure.setEnabled(False)
@@ -367,14 +373,14 @@ class CalculateSphCylCoefficientWindow(QDialog):
                 self.flush_log)
             self.calculatesphcylcoefThread.start()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}", # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_exposure.setEnabled(True)
             self.btn_browse.setEnabled(True)
             self.btn_capture.setEnabled(True)
             self.is_running = False  # 标识定标完成
-    
-    def flush_log(self,msg):
+
+    def flush_log(self, msg):
         cursor = self.log_box.textCursor()
         cursor.movePosition(cursor.End)
 
@@ -389,11 +395,11 @@ class CalculateSphCylCoefficientWindow(QDialog):
             prefix = "🟡 "
         else:
             prefix = "⚪ "
-        full_text=f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
+        full_text = f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
         cursor.insertText(full_text, fmt)
         self.log_box.setTextCursor(cursor)
         # 自动滚动到底部
-        sb=self.log_box.verticalScrollBar()
+        sb = self.log_box.verticalScrollBar()
         sb.setValue(sb.maximum())
 
         # 写入本地txt日志
@@ -426,7 +432,7 @@ class CalculateSphCylCoefficientWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "程序运行中，请勿关闭窗口", QMessageBox.Ok)
         else:
-            #==============关闭窗口保存当前UI参数====================
-            p=self.read_ui_params()
+            # ==============关闭窗口保存当前UI参数====================
+            p = self.read_ui_params()
             self.cfg_helper.save_params(p)
             event.accept()

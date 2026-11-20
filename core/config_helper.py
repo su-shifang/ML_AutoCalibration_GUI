@@ -5,12 +5,14 @@ from typing import Dict, Literal, Optional
 
 MsgLevel = Literal["INFO", "WARN", "ERROR"]
 
+
 def get_exe_dir() -> str:
     if hasattr(sys, '_MEIPASS'):
         exe_path = sys.executable
     else:
         exe_path = __file__
     return os.path.dirname(os.path.abspath(exe_path))
+
 
 class UiConfigHelper:
     def __init__(self, cfg_name: str):

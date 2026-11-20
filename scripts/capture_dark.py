@@ -13,7 +13,6 @@ def capture_dark():
     # camera pixel format
     pixel_format = mlcm.MLPixelFormat.MLMono12
 
-
     ret = ml_mono.ml_set_binning_selector(binn_selector)
     if not ret.success:
         raise RuntimeError("ml_set_binning_selector error")
@@ -41,7 +40,8 @@ def capture_dark():
     print(get_pixel_format)
 
     for i in range(1, 51):
-        exposure = mlcm.pyExposureSetting(exposure_mode=mlcm.ExposureMode.Fixed, exposure_time=i*1000)
+        exposure = mlcm.pyExposureSetting(
+            exposure_mode=mlcm.ExposureMode.Fixed, exposure_time=i*1000)
 
         # Set exposure for camera, contain auto and fixed.
         ret = ml_mono.ml_set_exposure(exposure)
@@ -53,7 +53,7 @@ def capture_dark():
         if not ret.success:
             raise RuntimeError("ml_capture_image_syn error")
         get_img = ml_mono.ml_get_image()
-        cv2.imwrite(save_path+"\\" + str(i) +"s.tif", get_img)
+        cv2.imwrite(os.path.join(save_path, f"{str(i)}s.tif"), get_img)
 
 
 if __name__ == "__main__":

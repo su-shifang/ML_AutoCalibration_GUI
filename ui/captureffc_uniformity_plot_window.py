@@ -13,9 +13,11 @@ from PyQt5.QtWidgets import (
     QRadioButton,
     QButtonGroup,
     QDialog,
+    QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon, QColor, QTextCharFormat
 from core.app_config import AppConfig
+from core.config_helper import UiConfigHelper, MsgLevel, get_exe_dir
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.captureffc_calUniformity_plot import (
@@ -24,6 +26,8 @@ from scripts.captureffc_calUniformity_plot import (
 from ui.rx_config_window import RXConfigWindow
 from ui.roi_config_window import ROIConfigWindow
 from ui.exposureconfig_window import ExposureConfigWindow
+from datetime import datetime
+import os
 
 
 class CaptureFFCThread(QThread):
@@ -37,8 +41,10 @@ class CaptureFFCThread(QThread):
 
     def run(self):
         try:
+            def callback_wrapper(level: MsgLevel, msg: str):
+                self.status_update.emit(msg)
             capture_ffc_images(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -56,8 +62,10 @@ class CalSyntheticThread(QThread):
 
     def run(self):
         try:
+            def callback_wrapper(level: MsgLevel, msg: str):
+                self.status_update.emit(msg)
             cal_synthetic_mean_images(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -75,8 +83,10 @@ class CalUniformityThread(QThread):
 
     def run(self):
         try:
+            def callback_wrapper(level: MsgLevel, msg: str):
+                self.status_update.emit(msg)
             cal_uniformity(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()
 
         except Exception as e:
@@ -92,7 +102,7 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             "capture ffc images; calculate ffc, fourcolor uniformity; generate plot")
         self.setGeometry(200, 200, 800, 700)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)  # type: ignore
         self.setWindowIcon(QIcon(
             "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
@@ -107,9 +117,35 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
         self.file_name = ""
         self.exposure_mode = ['Auto', 'Fixed']
         self.module_id = 1
+        self.log_file_path = ""
+        self.cfg_helper = UiConfigHelper("captureffc_uniformity_params.json")
         self._init_ui()
         self.is_running = False
         self.threads = []  # 存储活动线程
+        # =====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params = {
+            "avg_count": "1",
+            "binning": "0",
+            "binning_list": "0 1",
+            "nd_text": "4",
+            "xyz_text": "1",
+            "save_path": "",
+            "do_rx": False,
+            "sph_text": "-6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6",
+            "cyl_text": "-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
+            "axis_text": "0 15 30 45 60 75 90 105 120 135 150 165 180",
+            "do_ffc": False,
+            "do_uniformity": False,
+            "light_source": "W",
+            "plot_count": "7200",
+            "plot_coord": "1500 3900",
+            "exposure_map_serial": {},
+            "roi_map": {},
+            "rx_map": {}
+        }
+        self.cur_ui_params = self.cfg_helper.load_params(
+            self.default_ui_params)
+        self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
         grid_layout = QGridLayout()
@@ -279,7 +315,8 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
         self.rgbw_btngroup.addButton(self.cb_G, 2)
         self.rgbw_btngroup.addButton(self.cb_B, 3)
         self.rgbw_btngroup.addButton(self.cb_W, 4)
-        self.rgbw_btngroup.idClicked.connect(self._rgbw_changed) # type: ignore
+        self.rgbw_btngroup.idClicked.connect(
+            self._rgbw_changed)  # type: ignore
 
         h_layout.addWidget(self.cb_R)
         h_layout.addWidget(self.cb_G)
@@ -310,9 +347,9 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
         self.btn_capture.clicked.connect(self._start_capture_calculate)
         grid_layout.addWidget(self.btn_capture, 25, 0)
 
-        self.status_label = QLabel("状态：等待开始")
-        self.status_label.setWordWrap(True)  # 设置自动换行
-        grid_layout.addWidget(self.status_label, 26, 0)
+        self.log_box = QPlainTextEdit()
+        self.log_box.setReadOnly(True)
+        grid_layout.addWidget(self.log_box, 26, 0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -329,6 +366,118 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
         self.cb_calculate_synthetic.hide()
         self.btn_rx_config.hide()
         self.btn_roi_config.hide()
+
+    # 回填UI
+    def fill_ui_by_params(self, p):
+        self.line_edit_times.setText(p["avg_count"])
+        self.line_edit_binn.setText(p["binning"])
+        self.line_edit_binnlist.setText(p["binning_list"])
+        self.line_edit_ndlist.setText(p["nd_text"])
+        self.line_edit_xyzlist.setText(p["xyz_text"])
+        self.line_edit_path.setText(p["save_path"])
+        self.cb_useRX.setChecked(p["do_rx"])
+        self.line_edit_sphlist.setText(p["sph_text"])
+        self.line_edit_cyllist.setText(p["cyl_text"])
+        self.line_edit_axislist.setText(p["axis_text"])
+        self.cb_captureffc.setChecked(p["do_ffc"])
+        self.cb_calculate_uniformity.setChecked(p["do_uniformity"])
+        light_id_map = {
+            "R": 1,
+            "G": 2,
+            "B": 3,
+            "W": 4
+        }
+        light_val = p["light_source"]
+        btn_id = light_id_map[light_val]
+        self.rgbw_btngroup.button(btn_id).setChecked(True)
+        self.line_edit_pixelcount.setText(p["plot_count"])
+        self.line_edit_vrange.setText(p["plot_coord"])
+
+        serial_map = p.get("exposure_map_serial", {})
+        self.exposure_map_obj = {}
+        for nd_name, xyz_dict in serial_map.items():
+            nd_enum = mlcm.str_to_MLFilterEnum(nd_name)
+            self.exposure_map_obj[nd_enum] = {}
+            for xyz_name, setting_data in xyz_dict.items():
+                xyz_enum = mlcm.str_to_MLFilterEnum(xyz_name)
+                emode = mlcm.ExposureMode.Fixed if setting_data[
+                    "exposure_mode"] == "Fixed" else mlcm.ExposureMode.Auto
+                self.exposure_map_obj[nd_enum][xyz_enum] = mlcm.pyExposureSetting(
+                    exposure_mode=emode,
+                    exposure_time=setting_data["exposure_time"]
+                )
+
+        binn_serial = {
+            "1": mlcm.Binning.ONE_BY_ONE,
+            "2": mlcm.Binning.TWO_BY_TWO,
+            "4": mlcm.Binning.FOUR_BY_FOUR,
+            "8": mlcm.Binning.EIGHT_BY_EIGHT,
+            "16": mlcm.Binning.SIXTEEN_BY_SIXTEEN
+        }
+        roi_serial = p.get("roi_map", {})
+        self.roi_dict = {}
+        for binn, roi_list in roi_serial.items():
+            binning = binn_serial[binn]
+            self.roi_dict.setdefault(binning, [])
+            for roi_data in roi_list:
+                # 解析每个roi数据
+                roi = mlcm.pyCVRect(
+                    roi_data['x'], roi_data['y'], roi_data['width'], roi_data['height'])
+                self.roi_dict[binning].append(roi)
+
+        rx_serial = p.get("rx_map", {})
+        self.rx_dict = {}
+        for nd_str, rx_list in rx_serial.items():
+            nd_enum = mlcm.str_to_MLFilterEnum(nd_str)
+            self.rx_dict[nd_enum] = rx_list
+
+    # 读取当前UI所有参数，序列化
+    def read_ui_params(self):
+        exp_serial = {}
+        for nd_enum, xyz_dict in self.exposure_map_obj.items():
+            exp_serial[nd_enum.name] = {}
+            for xyz_enum, s in xyz_dict.items():
+                exp_serial[nd_enum.name][xyz_enum.name] = {
+                    "exposure_mode": s.exposure_mode.name,
+                    "exposure_time": s.exposure_time
+                }
+        roi_map = {}
+        for binn, roi_list in self.roi_dict.items():
+            roi_map[mlcm.Binning_to_Int(binn)] = [
+                self.serialize_pyCVRect(rect) for rect in roi_list]
+
+        rx_map = {}
+        for nd_enum, rx_list in self.rx_dict.items():
+            rx_map[nd_enum.name] = rx_list
+
+        return {
+            "avg_count": self.line_edit_times.text().strip(),
+            "binning": self.line_edit_binn.text().strip(),
+            "binning_list": self.line_edit_binnlist.text().strip(),
+            "nd_text": self.line_edit_ndlist.text().strip(),
+            "xyz_text": self.line_edit_xyzlist.text().strip(),
+            "save_path": self.line_edit_path.text().strip(),
+            "do_rx": self.cb_useRX.isChecked(),
+            "sph_text": self.line_edit_sphlist.text().strip(),
+            "cyl_text": self.line_edit_cyllist.text().strip(),
+            "axis_text": self.line_edit_axislist.text().strip(),
+            "do_ffc": self.cb_captureffc.isChecked(),
+            "do_uniformity": self.cb_calculate_uniformity.isChecked(),
+            "light_source": self.rgbw_btngroup.checkedButton().text(),
+            "plot_count": self.line_edit_pixelcount.text().strip(),
+            "plot_coord": self.line_edit_vrange.text().strip(),
+            "exposure_map_serial": exp_serial,
+            "roi_map": roi_map,
+            "rx_map": rx_map
+        }
+
+    def serialize_pyCVRect(self, rect: mlcm.pyCVRect):
+        return {
+            'x': rect.x,
+            'y': rect.y,
+            'width': rect.width,
+            'height': rect.height
+        }
 
     def _captureFFC_config(self):
         if self.cb_captureffc.isChecked():
@@ -358,7 +507,7 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,  # type: ignore
         )
 
         if folder_path:
@@ -377,13 +526,13 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
                                     "nd列表或xyz列表不能为空", QMessageBox.Ok)
                 return
             self.exposure_config_window = ExposureConfigWindow(
-                nd_list, xyz_list)
+                nd_list, xyz_list, exposure_map=self.exposure_map_obj)
             # 连接信号
             self.exposure_config_window.config_saved.connect(
                 self.update_config)
             self.exposure_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_config(self, exposure_map):
@@ -411,12 +560,13 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             nd_enum = [int(nd)
                        for nd in self.line_edit_ndlist.text().strip().split()]
             nd_list = [mlcm.MLFilterEnum(nd) for nd in nd_enum]
-            self.rx_config_window = RXConfigWindow(nd_list)
+            self.rx_config_window = RXConfigWindow(
+                nd_list, rx_dict=self.rx_dict)
             # 连接信号
             self.rx_config_window.config_saved.connect(self.update_rx_config)
             self.rx_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def _roi_config(self):
@@ -429,13 +579,14 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             binn_enum = [
                 int(binn) for binn in self.line_edit_binnlist.text().strip().split()]
             binn_list = [mlcm.Binning(binn) for binn in binn_enum]
-            self.roi_config_window = ROIConfigWindow(binn_list)
+            self.roi_config_window = ROIConfigWindow(
+                binn_list, roi_dict=self.roi_dict)
             # 连接信号
             self.roi_config_window.roi_config_saved.connect(
                 self.update_roi_config)
             self.roi_config_window.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_rx_config(self, rx_map):
@@ -445,17 +596,17 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
                 nd_enum = mlcm.str_to_MLFilterEnum(nd_str)
                 self.rx_dict[nd_enum] = rx_list
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def update_roi_config(self, roi_map):
         self.roi_dict = {}
         try:
             for binn, roi_list in roi_map.items():
-                self.roi_dict[binn] = roi_list
-            pass
+                if isinstance(binn, mlcm.Binning):
+                    self.roi_dict[binn] = roi_list
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def _useRX_state_changed(self):
@@ -489,7 +640,7 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             self.colorimeter.ml_bino_manage.ml_get_module_by_id(
                 self.module_id).ml_set_light_source(self.light_source)
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + str(e),
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def _start_capture_calculate(self):
@@ -529,15 +680,51 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
                 mlcm.MLFilterEnum.Y: mlcm.pyExposureSetting(exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100),
                 mlcm.MLFilterEnum.Z: mlcm.pyExposureSetting(exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100),
                 mlcm.MLFilterEnum.Clear: mlcm.pyExposureSetting(
-                    exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100)
+                    exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100),
+                mlcm.MLFilterEnum.YA: mlcm.pyExposureSetting(exposure_mode=mlcm.ExposureMode.Auto, exposure_time=100),
             }
+            # ========== 生成本次运行的时间戳，用于日志文件 ==========
+            run_ts = datetime.now().strftime('%Y-%m-%d')
+            self.log_file_path = os.path.join(
+                f"{get_exe_dir()}", f"{run_ts}_captureffc_uniformity_log.txt")
             self.start_capture_ffc()
 
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", f"exception: {e}",  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
             self.is_running = False
+
+    def flush_log(self, msg):
+        cursor = self.log_box.textCursor()
+        cursor.movePosition(cursor.End)
+
+        fmt = QTextCharFormat()
+        # 文字固定黑色，只靠前面emoji区分等级
+        fmt.setForeground(QColor("#000000"))
+        if "info" in msg.lower():
+            prefix = "🟢 "
+        elif "error" in msg.lower():
+            prefix = "🔴 "
+        elif "warn" in msg.lower():
+            prefix = "🟡 "
+        else:
+            prefix = "⚪ "
+        full_text = f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
+        cursor.insertText(full_text, fmt)
+        self.log_box.setTextCursor(cursor)
+        # 自动滚动到底部
+        sb = self.log_box.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+        # 写入本地txt日志
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, "a", encoding="utf-8") as f:
+                    f.write(full_text)
+            except Exception as log_err:
+                # 日志写入失败不打断主流程
+                print(f"write log file failed: {log_err}")
 
     def start_capture_ffc(self):
         if self.cb_captureffc.isChecked():
@@ -547,8 +734,6 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
                 self.btn_capture.setEnabled(True)
                 self.is_running = False
                 return
-            self.status_label.setText(
-                "<span style='color: green;'>状态: 正在进行拍图或计算...</span>")  # 更新状态
             self.btn_capture.setEnabled(False)
             self.is_running = True
             ffc_parameters = {
@@ -568,15 +753,13 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             self.threads.append(ffc_thread)  # 添加到活动线程列表
             ffc_thread.finished.connect(self.start_calculate_synthetic)
             ffc_thread.error.connect(self._on_capture_error)
-            ffc_thread.status_update.connect(self.update_status)
+            ffc_thread.status_update.connect(self.flush_log)
             ffc_thread.start()
         else:
             self.start_calculate_synthetic()
 
     def start_calculate_synthetic(self):
         if self.useRX and self.cb_calculate_synthetic.isChecked():
-            self.status_label.setText(
-                "<span style='color: green;'>状态: 正在进行拍图或计算...</span>")  # 更新状态
             self.btn_capture.setEnabled(False)
             self.is_running = True
             synthetic_parameters = {
@@ -589,7 +772,7 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             self.threads.append(synthetic_thread)
             synthetic_thread.finished.connect(self.start_calculate_uniformity)
             synthetic_thread.error.connect(self._on_capture_error)
-            synthetic_thread.status_update.connect(self.update_status)
+            synthetic_thread.status_update.connect(self.flush_log)
             synthetic_thread.start()
         else:
             self.start_calculate_uniformity()
@@ -614,8 +797,6 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
                 QMessageBox.warning(self, "MLColorimeter",
                                     "请先选择保存路径", QMessageBox.Ok)
                 return
-            self.status_label.setText(
-                "<span style='color: green;'>状态: 正在进行拍图或计算...</span>")  # 更新状态
             self.btn_capture.setEnabled(False)
             self.is_running = True
             uniformity_parameters = {
@@ -635,7 +816,7 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             self.threads.append(uniformity_thread)
             uniformity_thread.finished.connect(self.on_all_tasks_finished)
             uniformity_thread.error.connect(self._on_capture_error)
-            uniformity_thread.status_update.connect(self.update_status)
+            uniformity_thread.status_update.connect(self.flush_log)
             uniformity_thread.start()
         else:
             self.on_all_tasks_finished()
@@ -644,25 +825,15 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
         QMessageBox.information(self, "MLColorimeter", "完成!", QMessageBox.Ok)
         self.btn_capture.setEnabled(True)
         self.is_running = False  # 标识完成
-        self.status_label.setText(
-            "<span style='color: green;'>状态: 所有任务完成！</span>")  # 更新状态
-
-    def update_status(self, message):
-        self.status_label.setText(
-            f"<span style='color: green;'>状态: {message}</span>")
 
     def _on_capture_finished(self):
         QMessageBox.information(self, "MLColorimeter", "完成!", QMessageBox.Ok)
-        self.status_label.setText(
-            "<span style='color: green;'>状态: 完成！</span>")  # 更新状态
         self.btn_capture.setEnabled(True)
         self.is_running = False  # 标识定标完成
 
     def _on_capture_error(self, error_message):
         QMessageBox.critical(self, "MLColorimeter",
                              "发生错误: " + error_message, QMessageBox.Ok)
-        self.status_label.setText(
-            f"<span style='color: red;'>状态: 发生错误: {error_message}</span>")  # 更新状态为红色
         self.btn_capture.setEnabled(True)
         self.is_running = False  # 标识定标完成
 
@@ -672,4 +843,7 @@ class CaptureFFC_CalUniformity_Plot_Window(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "定标进行中，请勿关闭窗口", QMessageBox.Ok)
         else:
+            # ==============关闭窗口保存当前UI参数====================
+            p = self.read_ui_params()
+            self.cfg_helper.save_params(p)
             event.accept()

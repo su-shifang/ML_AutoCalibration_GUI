@@ -12,6 +12,7 @@ MsgLevel = Literal["INFO", "WARN", "ERROR"]
 
 matplotlib.use('Agg')
 
+
 def preprocess_image(img, block_size):
     height, width = img.shape[:2]
     new_height = height - (height % block_size)
@@ -66,7 +67,8 @@ def capture_dark_heatmap(
         else:
             print(msg)
     try:
-        update_status("INFO", f"capture dark heatmap start, run_time_tag: {run_time_tag}")
+        update_status(
+            "INFO", f"capture dark heatmap start, run_time_tag: {run_time_tag}")
         os.makedirs(save_path, exist_ok=True)
         raw_path = os.path.join(save_path, "raw")
         os.makedirs(raw_path, exist_ok=True)

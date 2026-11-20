@@ -12,14 +12,17 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout,
     QComboBox,
-    QRadioButton,
     QCheckBox,
+    QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QIcon
+from PyQt5.QtGui import QIntValidator, QIcon, QColor, QTextCharFormat
 from core.app_config import AppConfig
+from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
-from scripts.capture_image_fixedLUM import capture_image_ficedLUM_afterFFC
+from scripts.capture_image_fixedLUM import capture_image_fixedLUM_afterFFC
+from datetime import datetime
+import os
 
 
 class CaptureImageFixedLUMafterFFCThread(QThread):
@@ -33,8 +36,11 @@ class CaptureImageFixedLUMafterFFCThread(QThread):
 
     def run(self):
         try:
-            capture_image_ficedLUM_afterFFC(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+            # 包装回调：接受level，msg，拼接成字符串再发给信号
+            def callback_wrapper(level: MsgLevel, msg: str):
+                self.status_update.emit(msg)
+            capture_image_fixedLUM_afterFFC(
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -48,7 +54,7 @@ class CaptureImageFixedLUMWindow(QDialog):
         self.setGeometry(200, 200, 800, 500)
         self.colorimeter = AppConfig.get_colorimeter()
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)  # type: ignore
         self.setWindowIcon(QIcon(
             "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.intValidator = QIntValidator()
@@ -61,8 +67,34 @@ class CaptureImageFixedLUMWindow(QDialog):
         self.pixel_format = ['MLMono8', 'MLMono10', 'MLMono12',
                              'MLMono16', 'MLRGB24', 'MLBayer', 'MLBayerGB8', 'MLBayerGB12']
         self.select_path = path
+        self.log_file_path = ""
+        self.cfg_helper = UiConfigHelper("capture_image_fixedLUM_params.json")
         self._init_ui()
         self.is_running = False
+
+        # =====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params = {
+            "binn_selector": "Logic",
+            "binn_mode": "AVERAGE",
+            "binn": "0",
+            "pixel_format": "MLMono12",
+            "nd_text": "4",
+            "xyz_text": "1",
+            "et_text": "1 10",
+            "save_path": "",
+            "sph_text": "-6 -5 -4 -3 -2 -1 0 1 2 3 4 5 6",
+            "cyl_text": "-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
+            "axis_text": "0 15 30 45 60 75 90 105 120 135 150 165",
+            "dark_flag": False,
+            "ffc_flag": False,
+            "color_shift_flag": False,
+            "distortion_flag": False,
+            "exposure_flag": False,
+            "four_color_flag": False
+        }
+        self.cur_ui_params = self.cfg_helper.load_params(
+            self.default_ui_params)
+        self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
         grid_layout = QGridLayout()
@@ -84,7 +116,7 @@ class CaptureImageFixedLUMWindow(QDialog):
 
         self.label_pixel_format = QLabel(" pixel_format：")
         self.line_edit_pixel_format = QComboBox()
-        self.line_edit_pixel_format.addItems(self.pixel_format) # type: ignore
+        self.line_edit_pixel_format.addItems(self.pixel_format)  # type: ignore
         self.line_edit_pixel_format.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.line_edit_pixel_format.setCurrentText("MLMono12")
@@ -153,11 +185,6 @@ class CaptureImageFixedLUMWindow(QDialog):
         self.btn_browse = QPushButton("浏览...")
         self.btn_browse.clicked.connect(self._open_folder_dialog)
         grid_layout.addWidget(self.btn_browse, 8, 1)
-
-        self.radio_other = QRadioButton()
-        self.radio_other.setText("Linearity after FFC")
-        self.radio_other.setChecked(True)
-        grid_layout.addWidget(self.radio_other, 9, 0)
 
         self.group_box = QGroupBox("标定参数")
         from_layout = QFormLayout()
@@ -259,15 +286,15 @@ class CaptureImageFixedLUMWindow(QDialog):
         from_layout.addRow(horizontal_layout2)
 
         self.group_box.setLayout(from_layout)
-        grid_layout.addWidget(self.group_box, 10, 0)
+        grid_layout.addWidget(self.group_box, 9, 0)
 
         self.btn_start_capture = QPushButton("开始拍图")
         self.btn_start_capture.clicked.connect(self.capture_images)
-        grid_layout.addWidget(self.btn_start_capture, 11, 0)
+        grid_layout.addWidget(self.btn_start_capture, 10, 0)
 
-        self.status_label = QLabel("状态：等待开始")
-        self.status_label.setWordWrap(True)  # 设置自动换行
-        grid_layout.addWidget(self.status_label, 12, 0)
+        self.log_box = QPlainTextEdit()
+        self.log_box.setReadOnly(True)
+        grid_layout.addWidget(self.log_box, 11, 0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -281,6 +308,57 @@ class CaptureImageFixedLUMWindow(QDialog):
         self.line_edit_cyllist.hide()
         self.label_axislist.hide()
         self.line_edit_axislist.hide()
+
+    # 回填UI
+
+    def fill_ui_by_params(self, p):
+        binn_sel_idx = self.line_edit_binn_selector.findText(
+            p["binn_selector"])
+        if binn_sel_idx >= 0:
+            self.line_edit_binn_selector.setCurrentIndex(binn_sel_idx)
+        binn_mode_idx = self.line_edit_binn_mode.findText(p["binn_mode"])
+        if binn_mode_idx >= 0:
+            self.line_edit_binn_mode.setCurrentIndex(binn_mode_idx)
+
+        self.line_edit_binn.setText(p["binn"])
+        pf_idx = self.line_edit_pixel_format.findText(p["pixel_format"])
+        if pf_idx >= 0:
+            self.line_edit_pixel_format.setCurrentIndex(pf_idx)
+        self.line_edit_ndlist.setText(p["nd_text"])
+        self.line_edit_xyzlist.setText(p["xyz_text"])
+        self.line_edit_etlist.setText(p["et_text"])
+        self.line_edit_path.setText(p["save_path"])
+        self.line_edit_sphlist.setText(p["sph_text"])
+        self.line_edit_cyllist.setText(p["cyl_text"])
+        self.line_edit_axislist.setText(p["axis_text"])
+        self.checkbox_dark_flag.setChecked(p["dark_flag"])
+        self.checkbox_ffc_flag.setChecked(p["ffc_flag"])
+        self.checkbox_color_shift_flag.setChecked(p["color_shift_flag"])
+        self.checkbox_distortion_flag.setChecked(p["distortion_flag"])
+        self.checkbox_exposure_flag.setChecked(p["exposure_flag"])
+        self.checkbox_four_color_flag.setChecked(p["four_color_flag"])
+
+    # 读取当前UI所有参数，序列化
+    def read_ui_params(self):
+        return {
+            "binn_selector": self.line_edit_binn_selector.currentText(),
+            "binn_mode": self.line_edit_binn_mode.currentText(),
+            "binn": self.line_edit_binn.text().strip(),
+            "pixel_format": self.line_edit_pixel_format.currentText(),
+            "nd_text": self.line_edit_ndlist.text().strip(),
+            "xyz_text": self.line_edit_xyzlist.text().strip(),
+            "et_text": self.line_edit_etlist.text().strip(),
+            "save_path": self.line_edit_path.text().strip(),
+            "dark_flag": self.checkbox_dark_flag.isChecked(),
+            "ffc_flag": self.checkbox_ffc_flag.isChecked(),
+            "color_shift_flag": self.checkbox_color_shift_flag.isChecked(),
+            "distortion_flag": self.checkbox_distortion_flag.isChecked(),
+            "exposure_flag": self.checkbox_exposure_flag.isChecked(),
+            "sph_text": self.line_edit_sphlist.text().strip(),
+            "cyl_text": self.line_edit_cyllist.text().strip(),
+            "axis_text": self.line_edit_axislist.text().strip(),
+            "four_color_flag": self.checkbox_four_color_flag.isChecked()
+        }
 
     def _useRX_state_changed(self):
         if self.cb_useRX.isChecked():
@@ -317,6 +395,10 @@ class CaptureImageFixedLUMWindow(QDialog):
                 QMessageBox.critical(self, "MLColorimeter", "请完整填写所有参数",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 return
+            # ========== 生成本次运行的时间戳，用于日志文件 ==========
+            run_ts = datetime.now().strftime('%Y-%m-%d')
+            self.log_file_path = os.path.join(
+                self.save_path, f"{run_ts}_capture_image_fixedLUM_log.txt")
 
             if self.cb_useRX.isChecked():
                 self.sph_list = [
@@ -345,8 +427,6 @@ class CaptureImageFixedLUMWindow(QDialog):
                 exposure_flag=self.exposure_flag,
                 four_color_flag=self.four_color_flag
             )
-            self.status_label.setText(
-                "<span style='color: green;'>状态: 正在运行...</span>")  # 更新状态
             self.btn_start_capture.setEnabled(False)
             self.is_running = True
             parameters = {
@@ -372,7 +452,7 @@ class CaptureImageFixedLUMWindow(QDialog):
             self.captureimagefixedLUMafterFFCThread.error.connect(
                 self.on_capture_error)
             self.captureimagefixedLUMafterFFCThread.status_update.connect(
-                self.update_status)
+                self.flush_log)
             self.captureimagefixedLUMafterFFCThread.start()
         except Exception as e:
             QMessageBox.critical(self, "MLColorimeter", "exception" +
@@ -380,22 +460,46 @@ class CaptureImageFixedLUMWindow(QDialog):
             self.btn_start_capture.setEnabled(True)
             self.is_running = False
 
-    def update_status(self, message):
-        self.status_label.setText(
-            f"<span style='color: green;'>状态: {message}</span>")
+    def flush_log(self, msg):
+        cursor = self.log_box.textCursor()
+        cursor.movePosition(cursor.End)
+
+        fmt = QTextCharFormat()
+        # 文字固定黑色，只靠前面emoji区分等级
+        fmt.setForeground(QColor("#000000"))
+        if "info" in msg.lower():
+            prefix = "🟢 "
+        elif "error" in msg.lower():
+            prefix = "🔴 "
+        elif "warn" in msg.lower():
+            prefix = "🟡 "
+        else:
+            prefix = "⚪ "
+        full_text = f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
+        cursor.insertText(full_text, fmt)
+        self.log_box.setTextCursor(cursor)
+        # 自动滚动到底部
+        sb = self.log_box.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+        # 写入本地txt日志
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, "a", encoding="utf-8") as f:
+                    f.write(full_text)
+            except Exception as log_err:
+                # 日志写入失败不打断主流程
+                print(f"write log file failed: {log_err}")
 
     def on_capture_finished(self):
         QMessageBox.information(self, "MLColorimeter", "完成!", QMessageBox.Ok)
-        self.status_label.setText(
-            "<span style='color: green;'>状态: 完成！</span>")  # 更新状态
         self.btn_start_capture.setEnabled(True)
         self.is_running = False
 
     def on_capture_error(self, error_message):
         QMessageBox.critical(self, "MLColorimeter",
                              "发生错误: " + error_message, QMessageBox.Ok)
-        self.status_label.setText(
-            f"<span style='color: red;'>状态: 发生错误: {error_message}</span>")  # 更新状态为红色
+
         self.btn_start_capture.setEnabled(True)
         self.is_running = False
 
@@ -405,6 +509,9 @@ class CaptureImageFixedLUMWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "程序运行中，请勿关闭窗口", QMessageBox.Ok)
         else:
+            # ==============关闭窗口保存当前UI参数====================
+            p = self.read_ui_params()
+            self.cfg_helper.save_params(p)
             event.accept()
 
     def _open_folder_dialog(self):
@@ -413,7 +520,7 @@ class CaptureImageFixedLUMWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,  # type: ignore
         )
 
         if folder_path:

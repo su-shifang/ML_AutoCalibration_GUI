@@ -74,7 +74,7 @@ def field_curve(
         if not ret.success:
             raise RuntimeError(
                 f"ml_set_binning_mode error, msg: {ret.message}")
-        
+
         ret = ml_mono.ml_set_binning(binn)
         if not ret.success:
             raise RuntimeError(f"ml_set_binning error, msg: {ret.message}")
@@ -90,8 +90,8 @@ def field_curve(
         ret = ml_mono.ml_set_exposure(exposure)
         if not ret.success:
             raise RuntimeError(f"ml_set_exposure error, msg: {ret.message}")
-        et=ml_mono.ml_get_exposure_time()
-        update_status("INFO",f"相机参数设置完成，自动曝光结束，曝光时间：{str(et)}")
+        et = ml_mono.ml_get_exposure_time()
+        update_status("INFO", f"相机参数设置完成，自动曝光结束，曝光时间：{str(et)}")
 
         for freq in freq_list:
             update_status(
