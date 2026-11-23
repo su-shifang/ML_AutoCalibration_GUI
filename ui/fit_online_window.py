@@ -11,14 +11,18 @@ from PyQt5.QtWidgets import (
     QSpacerItem,
     QDialog,
     QComboBox,
-    QFormLayout
+    QFormLayout,
+    QPlainTextEdit
 )
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon, QColor, QTextCharFormat
 from core.app_config import AppConfig
+from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.circle_fit_online import circle_fit_online
 from scripts.polynomial_fit_online import polynomial_fit_online
+from datetime import datetime
+import os
 
 
 class FitOnlineThread(QThread):
@@ -32,8 +36,10 @@ class FitOnlineThread(QThread):
 
     def run(self):
         try:
+            def callback_wrapper(level: MsgLevel, msg: str):
+                self.status_update.emit(msg)
             circle_fit_online(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -50,8 +56,10 @@ class PolynomialFitOnlineThread(QThread):
 
     def run(self):
         try:
+            def callback_wrapper(level: MsgLevel, msg: str):
+                self.status_update.emit(msg)
             polynomial_fit_online(
-                status_callback=self.status_update.emit, **self.parameters) # type: ignore
+                status_callback=callback_wrapper, **self.parameters)  # type: ignore
             self.finished.emit()  # 发送完成信号
         except Exception as e:
             self.error.emit(str(e))  # 发送错误信号
@@ -63,7 +71,7 @@ class FitOnlineWindow(QDialog):
         self.setWindowTitle("fit online")
         self.setGeometry(200, 200, 800, 500)
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint |
-                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint) # type: ignore
+                            Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)  # type: ignore
         self.setWindowIcon(QIcon(
             "D:/pythonObject/ML_AutoCalibration_GUI/ML_AutoCalibration_GUI/FingerPrintScanMTF.ico"))
         self.colorimeter = AppConfig.get_colorimeter()
@@ -76,30 +84,52 @@ class FitOnlineWindow(QDialog):
         self.pixel_format = ['MLMono8', 'MLMono10', 'MLMono12',
                              'MLMono16', 'MLRGB24', 'MLBayer', 'MLBayerGB8', 'MLBayerGB12']
         self.fit_type = ['circle', 'polynomial']
+        self.log_file_path = ""
+        self.cfg_helper = UiConfigHelper("fit_online_params.json")
         self._init_ui()
 
         # 标识当前流程是否正在进行
         self.is_running = False
+
+        # =====================默认参数，加载历史参数并回填UI==============================
+        self.default_ui_params = {
+            "binning": "0",
+            "pixel_format": "MLMono12",
+            "nd_text": "4",
+            "xyz_text": "1",
+            "cyl_text": "-4 -3.75 -3.5 -3.25 -3 -2.75 -2.5 -2.25 -2 -1.75 -1.5 -1.25 -1 -0.75 -0.5 -0.25 0",
+            "axis_text": "0 15 30 45 60 75 90 105 120 135 150 165 180",
+            "roi_x": "0",
+            "roi_y": "0",
+            "roi_w": "0",
+            "roi_h": "0",
+            "fit_type": "circle",
+            "fit_file_path": "",
+            "save_path": ""
+        }
+        self.cur_ui_params = self.cfg_helper.load_params(
+            self.default_ui_params)
+        self.fill_ui_by_params(self.cur_ui_params)
 
     def _init_ui(self):
         grid_layout = QGridLayout()
         group_box0 = QGroupBox("相机设置")
         from_layout0 = QFormLayout()
         self.label_binnlist = QLabel(" binning：")
-        self.line_edit_binnlist = QLineEdit()
-        self.line_edit_binnlist.setSizePolicy(
+        self.line_edit_binn = QLineEdit()
+        self.line_edit_binn.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         int_validator = QIntValidator(0, 4, self)
-        self.line_edit_binnlist.setValidator(int_validator)
-        self.line_edit_binnlist.setText("0")
-        self.line_edit_binnlist.setPlaceholderText(
+        self.line_edit_binn.setValidator(int_validator)
+        self.line_edit_binn.setText("0")
+        self.line_edit_binn.setPlaceholderText(
             "0: 1X1, 1: 2X2, 2: 4X4, 3: 8X8, 4: 16X16")
-        self.line_edit_binnlist.textChanged.connect(self.validate_input)
-        from_layout0.addRow(self.label_binnlist, self.line_edit_binnlist)
+        self.line_edit_binn.textChanged.connect(self.validate_input)
+        from_layout0.addRow(self.label_binnlist, self.line_edit_binn)
 
         self.label_pixel_format = QLabel(" pixel_format：")
         self.line_edit_pixel_format = QComboBox()
-        self.line_edit_pixel_format.addItems(self.pixel_format) # type: ignore
+        self.line_edit_pixel_format.addItems(self.pixel_format)  # type: ignore
         self.line_edit_pixel_format.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.line_edit_pixel_format.setCurrentText("MLMono12")
@@ -240,9 +270,9 @@ class FitOnlineWindow(QDialog):
         self.btn_capture.clicked.connect(self.start_fit_online)
         grid_layout.addWidget(self.btn_capture, 16, 0)
 
-        self.status_label = QLabel("状态：等待开始")
-        self.status_label.setWordWrap(True)  # 设置自动换行
-        grid_layout.addWidget(self.status_label, 17, 0)
+        self.log_box = QPlainTextEdit()
+        self.log_box.setReadOnly(True)
+        grid_layout.addWidget(self.log_box, 17, 0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum,
                              QSizePolicy.Expanding)
@@ -250,18 +280,58 @@ class FitOnlineWindow(QDialog):
 
         self.setLayout(grid_layout)
 
+    # 回填UI
+    def fill_ui_by_params(self, p):
+        self.line_edit_binn.setText(p["binning"])
+        pf_idx = self.line_edit_pixel_format.findText(p["pixel_format"])
+        if pf_idx >= 0:
+            self.line_edit_pixel_format.setCurrentIndex(pf_idx)
+
+        self.line_edit_ndlist.setText(p["nd_text"])
+        self.line_edit_xyzlist.setText(p["xyz_text"])
+        self.line_edit_cyllist.setText(p["cyl_text"])
+        self.line_edit_axislist.setText(p["axis_text"])
+        self.line_edit_x_input.setText(p["roi_x"])
+        self.line_edit_y_input.setText(p["roi_y"])
+        self.line_edit_width_input.setText(p["roi_w"])
+        self.line_edit_height_input.setText(p["roi_h"])
+        fp_idx = self.cb_fit_type.findText(p["fit_type"])
+        if fp_idx >= 0:
+            self.cb_fit_type.setCurrentIndex(fp_idx)
+        self.line_edit_fit_path.setText(p["fit_file_path"])
+        self.line_edit_path.setText(p["save_path"])
+
+    # 读取当前UI所有参数，序列化
+
+    def read_ui_params(self):
+        return {
+            "binning": self.line_edit_binn.text().strip(),
+            "pixel_format": self.line_edit_pixel_format.currentText(),
+            "nd_text": self.line_edit_ndlist.text().strip(),
+            "xyz_text": self.line_edit_xyzlist.text().strip(),
+            "cyl_text": self.line_edit_cyllist.text().strip(),
+            "axis_text": self.line_edit_axislist.text().strip(),
+            "roi_x": self.line_edit_x_input.text().strip(),
+            "roi_y": self.line_edit_y_input.text().strip(),
+            "roi_w": self.line_edit_width_input.text().strip(),
+            "roi_h": self.line_edit_height_input.text().strip(),
+            "fit_type": self.cb_fit_type.currentText(),
+            "fit_file_path": self.line_edit_fit_path.text().strip(),
+            "save_path": self.line_edit_path.text().strip()
+        }
+
     def validate_input(self):
-        text = self.line_edit_binnlist.text()
+        text = self.line_edit_binn.text()
         if text:
             value = int(text)
             if value < 0 or value > 4:
-                self.line_edit_binnlist.setText("")
+                self.line_edit_binn.setText("")
 
     def start_fit_online(self):
         try:
             self.pixel_format = self.get_current_pixel_format()
             self.binn = mlcm.Binning(
-                int(self.line_edit_binnlist.text().strip()))
+                int(self.line_edit_binn.text().strip()))
             self.fit_file_path = self.line_edit_fit_path.text()
             self.out_path = self.line_edit_path.text()
             nd_enum = [int(nd)
@@ -279,9 +349,9 @@ class FitOnlineWindow(QDialog):
             width = int(self.line_edit_width_input.text())
             height = int(self.line_edit_height_input.text())
             self.roi = mlcm.pyCVRect(x, y, width, height)
-
-            self.status_label.setText(
-                "<span style='color: green;'>状态: 正在运行...</span>")  # 更新状态
+            # 新建日志文件
+            self.log_file_path = os.path.join(
+                self.cfg_helper.log_path, f"fit_online_log.txt")
             self.btn_capture.setEnabled(False)
             self.is_running = True
             parameters = {
@@ -302,7 +372,7 @@ class FitOnlineWindow(QDialog):
                     self.on_fitonline_finished)
                 self.fit_online_thread.error.connect(self.on_fitoneline_error)
                 self.fit_online_thread.status_update.connect(
-                    self.update_status)
+                    self.flush_log)
                 self.fit_online_thread.start()
             else:
                 self.fit_online_thread = PolynomialFitOnlineThread(parameters)
@@ -310,31 +380,54 @@ class FitOnlineWindow(QDialog):
                     self.on_fitonline_finished)
                 self.fit_online_thread.error.connect(self.on_fitoneline_error)
                 self.fit_online_thread.status_update.connect(
-                    self.update_status)
+                    self.flush_log)
                 self.fit_online_thread.start()
 
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e,  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             self.btn_capture.setEnabled(True)
             self.is_running = False
 
-    def update_status(self, message):
-        self.status_label.setText(
-            f"<span style='color: green;'>状态: {message}</span>")
+    def flush_log(self, msg):
+        cursor = self.log_box.textCursor()
+        cursor.movePosition(cursor.End)
+
+        fmt = QTextCharFormat()
+        # 文字固定黑色，只靠前面emoji区分等级
+        fmt.setForeground(QColor("#000000"))
+        if "info" in msg.lower():
+            prefix = "🟢 "
+        elif "error" in msg.lower():
+            prefix = "🔴 "
+        elif "warn" in msg.lower():
+            prefix = "🟡 "
+        else:
+            prefix = "⚪ "
+        full_text = f"{prefix}{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]} {msg}\n"
+        cursor.insertText(full_text, fmt)
+        self.log_box.setTextCursor(cursor)
+        # 自动滚动到底部
+        sb = self.log_box.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+        # 写入本地txt日志
+        if self.log_file_path:
+            try:
+                with open(self.log_file_path, "a", encoding="utf-8") as f:
+                    f.write(full_text)
+            except Exception as log_err:
+                # 日志写入失败不打断主流程
+                print(f"write log file failed: {log_err}")
 
     def on_fitonline_finished(self):
         QMessageBox.information(self, "MLColorimeter", "完成!", QMessageBox.Ok)
-        self.status_label.setText(
-            "<span style='color: green;'>状态: 完成！</span>")  # 更新状态
         self.btn_capture.setEnabled(True)
         self.is_running = False  # 标识定标完成
 
     def on_fitoneline_error(self, error_message):
         QMessageBox.critical(self, "MLColorimeter",
                              "发生错误: " + error_message, QMessageBox.Ok)
-        self.status_label.setText(
-            f"<span style='color: red;'>状态: 发生错误: {error_message}</span>")  # 更新状态为红色
         self.btn_capture.setEnabled(True)
         self.is_running = False  # 标识定标完成
 
@@ -344,6 +437,9 @@ class FitOnlineWindow(QDialog):
             event.ignore()
             QMessageBox.warning(self, "警告", "程序运行中，请勿关闭窗口", QMessageBox.Ok)
         else:
+            # ==============关闭窗口保存当前UI参数====================
+            p = self.read_ui_params()
+            self.cfg_helper.save_params(p)
             event.accept()
 
     def _open_folder_dialog(self):
@@ -352,7 +448,7 @@ class FitOnlineWindow(QDialog):
             self,
             self.dialog_title,
             self.default_path if self.default_path else "",  # 初始路径
-            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks, # type: ignore
+            options=QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,  # type: ignore
         )
 
         if folder_path:

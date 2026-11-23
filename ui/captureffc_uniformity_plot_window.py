@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QIcon, QColor, QTextCharFormat
 from core.app_config import AppConfig
-from core.config_helper import UiConfigHelper, MsgLevel, get_exe_dir
+from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.captureffc_calUniformity_plot import (
