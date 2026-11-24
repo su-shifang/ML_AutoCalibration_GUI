@@ -21,7 +21,7 @@ from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.fourcolor_calibration import fourcolor_calibration_capture, fourcolor_calibration_calculate
-from ui.exposureconfig_window import ExposureConfigWindow
+from ui.dialog.exposureconfig_window import ExposureConfigWindow
 from datetime import datetime
 import os
 

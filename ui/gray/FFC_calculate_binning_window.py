@@ -21,7 +21,7 @@ from core.config_helper import UiConfigHelper, MsgLevel
 from PyQt5.QtCore import pyqtSignal, Qt, QThread
 import mlcolorimeter as mlcm
 from scripts.FFC_calculate_binn import FFC_calculate
-from ui.grayrange_dialog import GrayRangeDialog
+from ui.dialog.grayrange_dialog import GrayRangeDialog
 from datetime import datetime
 import os
 

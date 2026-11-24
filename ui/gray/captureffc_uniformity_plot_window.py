@@ -23,9 +23,9 @@ import mlcolorimeter as mlcm
 from scripts.captureffc_calUniformity_plot import (
     cal_synthetic_mean_images, capture_ffc_images, cal_uniformity)
 
-from ui.rx_config_window import RXConfigWindow
-from ui.roi_config_window import ROIConfigWindow
-from ui.exposureconfig_window import ExposureConfigWindow
+from ui.dialog.rx_config_window import RXConfigWindow
+from ui.dialog.roi_config_window import ROIConfigWindow
+from ui.dialog.exposureconfig_window import ExposureConfigWindow
 from datetime import datetime
 import os
 

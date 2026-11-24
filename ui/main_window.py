@@ -10,26 +10,26 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIcon
 from core.app_config import AppConfig
 from ui.settings_window import SettingsWindow
-from ui.dark_heatmap_window import DarkHeatMapWindow
-from ui.captureffc_uniformity_plot_window import CaptureFFC_CalUniformity_Plot_Window
-from ui.mono_calibration_window import MonoCalibrationWindow
-from ui.calculate_sph_cyl_coefficient_window import CalculateSphCylCoefficientWindow
-from ui.capture_center_window import CaptureCenterWindow
-from ui.capture_image_fixedLUM_window import CaptureImageFixedLUMWindow
-from ui.filed_curve_window import FiledCurveWindow
-from ui.fourcolor_calibration_window import FourColorCalabrationWindow
-from ui.calculate_sph_cyl_coefficient_colorcamera_window import CalculateSphCylCoefficientColorCameraWindow
-from ui.capture_RX_center_colorcamera_window import CaptureRXCenterColorCameraWindow
-from ui.captureffc_calUniformity_plot_colorcamera_window import CaptureFFCCalUniformityPlotColorCameraWindow
-from ui.mono_calibration_colorcamera_window import MonoCalibrationColorCameraWindow
-from ui.FFC_calculate_binning_window import FFCCalculateBinningWindow
-from ui.fit_online_window import FitOnlineWindow
+from ui.gray.dark_heatmap_window import DarkHeatMapWindow
+from ui.gray.captureffc_uniformity_plot_window import CaptureFFC_CalUniformity_Plot_Window
+from ui.gray.mono_calibration_window import MonoCalibrationWindow
+from ui.gray.calculate_sph_cyl_coefficient_window import CalculateSphCylCoefficientWindow
+from ui.gray.capture_center_window import CaptureCenterWindow
+from ui.gray.capture_image_fixedLUM_window import CaptureImageFixedLUMWindow
+from ui.gray.filed_curve_window import FiledCurveWindow
+from ui.gray.fourcolor_calibration_window import FourColorCalabrationWindow
+from ui.color.calculate_sph_cyl_coefficient_colorcamera_window import CalculateSphCylCoefficientColorCameraWindow
+from ui.color.capture_RX_center_colorcamera_window import CaptureRXCenterColorCameraWindow
+from ui.color.captureffc_calUniformity_plot_colorcamera_window import CaptureFFCCalUniformityPlotColorCameraWindow
+from ui.color.mono_calibration_colorcamera_window import MonoCalibrationColorCameraWindow
+from ui.gray.FFC_calculate_binning_window import FFCCalculateBinningWindow
+from ui.gray.fit_online_window import FitOnlineWindow
 from ui.version_window import VersionWindow
-from ui.daogui_vid_window import DaoGuiVIDWindow
-from ui.image_detection_window import ImageDetectionWindow
-from ui.resizeFFCimages_window import ResizeFFCImagesWindow
-from ui.generate_colorshift_window import GenerateColorShift
-from ui.config_detection_window import ConfigDetectionWindow
+from ui.tool.daogui_vid_window import DaoGuiVIDWindow
+from ui.tool.image_detection_window import ImageDetectionWindow
+from ui.tool.resizeFFCimages_window import ResizeFFCImagesWindow
+from ui.tool.generate_colorshift_window import GenerateColorShift
+from ui.tool.config_detection_window import ConfigDetectionWindow
 
 
 class MainWindow(QMainWindow):
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.Yes,
             )
         except Exception as e:
-            QMessageBox.critical(self, "MLColorimeter", "exception" + e, # type: ignore
+            QMessageBox.critical(self, "MLColorimeter", "exception" + e,  # type: ignore
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
 
     def disconnect_colorimeter(self):
